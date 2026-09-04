@@ -956,8 +956,8 @@ describe("sampleVolume", () => {
         return {
           result: {
             transactions: [
-              { close_time_iso: "2026-09-04T12:00:00Z", meta: ammXrpDeltaMeta("rBig", "1000000000", "1003000000") },
-              { close_time_iso: "2026-09-04T11:00:00Z", meta: ammXrpDeltaMeta("rBig", "1003000000", "1000000000") },
+              { close_time_iso: "2026-09-04T12:00:00Z", meta: ammXrpDeltaMeta("rBig", "1000000000000", "1003000000000") },
+              { close_time_iso: "2026-09-04T11:00:00Z", meta: ammXrpDeltaMeta("rBig", "1003000000000", "1000000000000") },
               { close_time_iso: "2026-09-04T00:00:00Z", meta: ammXrpDeltaMeta("rOther", "5", "6") },
             ],
           },
@@ -1338,8 +1338,7 @@ describe("seller MCP server", () => {
 
   it("rejects an invalid mandate", async () => {
     const client = await connect();
-    const res: any = await client.callTool({ name: "optimize_allocation", arguments: { asset: "RLUSD", amount: -1 } });
-    expect(res.isError).toBe(true);
+    await expect(client.callTool({ name: "optimize_allocation", arguments: { asset: "RLUSD", amount: -1 } })).rejects.toThrow();
   });
 });
 ```
@@ -1434,7 +1433,7 @@ export function buildMcpServer(cfg: SellerConfig, engine: SellerEngine): McpServ
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run tests/seller/mcp.test.ts`
-Expected: PASS (4 tests). The invalid-mandate case relies on the SDK's zod validation returning `isError: true`.
+Expected: PASS (4 tests). The invalid-mandate case relies on the SDK's zod validation rejecting the call with an InvalidParams JSON-RPC error, which `callTool` surfaces as a thrown error.
 
 - [ ] **Step 5: Commit**
 
@@ -2294,7 +2293,7 @@ describe("runAgentLoop", () => {
     const dir = mkdtempSync(join(tmpdir(), "agent-"));
     const audit = new AuditLog(dir, "run");
     const { responses } = scriptedResponses([[call("list_opportunities", {}, "1")], [call("list_opportunities", {}, "2")]]);
-    const out = await runAgentLoop({ responses, model: "test", mcp, pay: async () => ({ status: "failed", reason: "x" }), audit, maxTurns: 2 }, mandate);
+    const out = await runAgentLoop({ responses, model: "test", mcp, pay: async () => ({ status: "failed" as const, reason: "x" }), audit, maxTurns: 2 }, mandate);
     expect(out.action).toBe("no_decision");
     expect(readRun(dir, "run").at(-1)?.event.type).toBe("error");
   });
@@ -2621,7 +2620,7 @@ Expected: FAIL, module not found.
 ```ts
 import "dotenv/config";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import express, { type Express } from "express";
 import { listRuns, readRun } from "../shared/audit.js";
 
@@ -2637,7 +2636,7 @@ export function buildDashboardApp(runsDir: string): Express {
   return app;
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.DASHBOARD_PORT ?? "8090");
   buildDashboardApp("runs").listen(port, "127.0.0.1", () => {
     console.log(`dashboard on http://127.0.0.1:${port}`);
