@@ -1,5 +1,5 @@
 import type { Wallet } from "xrpl";
-import { defaultPaymentRequirementsSelector, x402Purchase } from "x402-xrpl";
+import { decodePaymentResponseHeader, defaultPaymentRequirementsSelector, x402Purchase } from "x402-xrpl";
 import type { AuditLog } from "../shared/audit.js";
 import { explorerTxUrl } from "../shared/types.js";
 import type { SpendTracker } from "./spendPolicy.js";
@@ -65,6 +65,25 @@ export async function payForResource(deps: PayDeps, input: { resource: string; b
   if (declinedReason) {
     deps.audit.append({ type: "payment_declined", resource: input.resource, reason: declinedReason });
     return { status: "declined", reason: declinedReason };
+  }
+
+  if (result && result.status !== "success" && result.response) {
+    const header = result.response.headers.get("PAYMENT-RESPONSE");
+    const settlement = header ? decodePaymentResponseHeader(header) : undefined;
+    if (settlement?.success && settlement.transaction) {
+      deps.tracker.record(amountDrops);
+      deps.audit.append({
+        type: "payment_settled",
+        transaction: settlement.transaction,
+        payer: settlement.payer ?? deps.wallet.classicAddress,
+        amountDrops,
+        network: settlement.network || deps.network,
+        explorer: explorerTxUrl(settlement.transaction),
+      });
+      const message = `seller returned HTTP ${result.response.status} after payment settled: ${await result.response.text()}`;
+      deps.audit.append({ type: "error", message });
+      return { status: "failed", reason: message };
+    }
   }
 
   if (!result || result.status !== "success" || !result.response || !result.transaction) {

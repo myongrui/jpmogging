@@ -59,6 +59,28 @@ describe("payForResource", () => {
     expect(readRun(dir, "run").at(-1)?.event.type).toBe("error");
   });
 
+  it("records the settlement when the seller fails after being paid", async () => {
+    const { dir, audit, tracker } = setup();
+    const settlement = Buffer.from(JSON.stringify({ success: true, transaction: "TX3", network: "xrpl:1", payer: wallet.classicAddress })).toString("base64");
+    const purchase = (async (opts: any) => {
+      opts.paymentRequirementsSelector(accepts, "xrpl:1", "exact", opts.maxValue);
+      return {
+        status: "failed",
+        reason: "http_500",
+        response: new Response(JSON.stringify({ error: "analysis failed" }), { status: 500, headers: { "PAYMENT-RESPONSE": settlement } }),
+      };
+    }) as any;
+
+    const out = await payForResource({ wallet, network: "xrpl:1", tracker, audit, purchase }, { resource: "http://s/api/x", body: {} });
+    expect(out.status).toBe("failed");
+    expect(out).toMatchObject({ reason: expect.stringContaining("500") });
+    expect(tracker.spentDrops).toBe(500_000n);
+    const records = readRun(dir, "run");
+    expect(records.map((r) => r.event.type)).toEqual(["payment_required", "payment_settled", "error"]);
+    expect(records[1].event).toMatchObject({ transaction: "TX3", payer: wallet.classicAddress, amountDrops: "500000" });
+    expect(records[2].event).toMatchObject({ message: expect.stringContaining("analysis failed") });
+  });
+
   it("returns paid with the raw text when the body is not JSON", async () => {
     const { dir, audit, tracker } = setup();
     const purchase = (async (opts: any) => {
