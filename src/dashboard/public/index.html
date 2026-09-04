@@ -44,7 +44,7 @@ function render(records) {
     let body = "";
     if (event.type === "payment_settled") {
       const txLink = String(event.explorer).startsWith("https://testnet.xrpl.org/") ? `<a href="${esc(event.explorer)}" target="_blank">${esc(event.transaction)}</a>` : esc(event.transaction);
-      body = `<pre>tx ${txLink}\npayer ${esc(event.payer)} → ${esc(event.payTo)} · ${esc(event.amountDrops)} drops · ${esc(event.network)}</pre>`;
+      body = `<pre>tx ${txLink}\npayer ${esc(event.payer)} → ${esc(event.payTo ?? "")} · ${esc(event.amountDrops)} drops · ${esc(event.network)}</pre>`;
     }
     else if (event.type === "result" && Array.isArray(event.result?.allocations)) body = fmtAlloc(event.result);
     else if (event.type === "decision") body = `<pre>${esc(event.action)}\n\n${esc(event.rationale)}</pre>`;
