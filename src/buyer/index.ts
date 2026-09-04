@@ -29,19 +29,23 @@ console.log(`buyer wallet ${wallet.classicAddress} on ${network}`);
 console.log(`spend policy ${policy.maxDropsPerRequest} drops/request, ${policy.maxDropsPerSession} drops/session`);
 
 const mcp = await connectMcp(`${sellerBaseUrl}/mcp`);
-const decision = await runAgentLoop(
-  {
-    responses: openai.responses,
-    model: process.env.OPENAI_MODEL ?? "gpt-5.6-sol",
-    mcp,
-    pay: (input) => payForResource({ wallet, network, tracker, audit }, input),
-    audit,
-    log: (line) => console.log(line),
-    spendSummary: `up to ${policy.maxDropsPerRequest} drops per request and ${policy.maxDropsPerSession} drops per run`,
-  },
-  mandate,
-);
-await mcp.close();
+let decision: Awaited<ReturnType<typeof runAgentLoop>>;
+try {
+  decision = await runAgentLoop(
+    {
+      responses: openai.responses,
+      model: process.env.OPENAI_MODEL ?? "gpt-5.6-sol",
+      mcp,
+      pay: (input) => payForResource({ wallet, network, tracker, audit }, input),
+      audit,
+      log: (line) => console.log(line),
+      spendSummary: `up to ${policy.maxDropsPerRequest} drops per request and ${policy.maxDropsPerSession} drops per run`,
+    },
+    mandate,
+  );
+} finally {
+  await mcp.close();
+}
 
 console.log("");
 console.log(`decision: ${decision.action}`);
