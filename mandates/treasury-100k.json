@@ -1,0 +1,8 @@
+{
+  "asset": "RLUSD",
+  "amount": 100000,
+  "horizon_hours": 72,
+  "minimum_liquidity": 0.5,
+  "maximum_risk_score": 30,
+  "maximum_protocol_allocation": 0.25
+}
