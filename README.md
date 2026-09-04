@@ -70,7 +70,7 @@ tests/**/*.test.ts                   one test file per source module
 runs/                                JSONL audit logs (gitignored)
 ```
 
-The **seller** is an Express server exposing a stateless MCP endpoint at `/mcp` (discovery and a paid tool) plus an x402-guarded REST resource at `/api/optimize_allocation` that runs the intelligence engine. The **buyer** is a GPT-5.6 Sol tool-use loop whose tool list is built dynamically from MCP `listTools`, plus two local tools: `pay_for_resource` (x402 purchase under a spend policy) and `record_decision`. The buyer calls the OpenAI Responses API with model `gpt-5.6-sol` (override with `OPENAI_MODEL`) and `reasoning.effort` set to `low`; its tool list is built at runtime from MCP `listTools` plus two local tools, `pay_for_resource` and `record_decision`. The **dashboard** serves an audit trail of every run written as JSONL.
+The **seller** is an Express server exposing a stateless MCP endpoint at `/mcp` (discovery and a paid tool) plus an x402-guarded REST resource at `/api/optimize_allocation` that runs the intelligence engine. The **buyer** is a GPT-5.6 Sol tool-use loop whose tool list is built dynamically from MCP `listTools`, plus two local tools: `pay_for_resource` (x402 purchase under a spend policy) and `record_decision`. The buyer calls the OpenAI Responses API with model `gpt-5.6-sol` (override with `OPENAI_MODEL`) and `reasoning.effort` set to `low`. The **dashboard** serves an audit trail of every run written as JSONL.
 
 ## How MCP and x402 Divide the Work
 
@@ -88,7 +88,7 @@ The MVP heuristic evaluates XRPL AMM opportunities and produces a risk-adjusted 
 - Start at 20.
 - If the asset issuer is in the RLUSD allowlist (rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De): +0. Else if the issuer is xrpscan-verified: +20. Else: +40.
 - If TVL is below 50,000 XRP: +25. Else if below 250,000 XRP: +10.
-- If trading fee exceeds 500 basis points (0.5%): +10.
+- If trading fee exceeds 500 (the AMM fee unit is 1/100,000, so 500 equals 0.5%, or 50 basis points): +10.
 - If the asset is frozen: +30.
 - Clamp to 0–100.
 
