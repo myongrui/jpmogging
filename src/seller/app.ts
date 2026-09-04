@@ -22,6 +22,7 @@ export function buildSellerApp(cfg: SellerConfig, engine: SellerEngine, opts: { 
       resource: "xrpl-fi:optimize_allocation",
       description: OPTIMIZE_DESCRIPTION,
       settle: true,
+      sourceTag: 804681468,
     });
 
   app.get("/health", (_req, res) => {
