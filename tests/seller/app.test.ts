@@ -91,4 +91,28 @@ describe("seller app", () => {
     const body = await res.json();
     expect(body.tools[0]).toMatchObject({ name: "optimize_allocation", price_drops: "500000", asset: "XRP", network: "xrpl:1" });
   });
+
+  it("returns a JSON 500 when the engine fails", async () => {
+    const failingEngine = {
+      listOpportunities: async () => [],
+      runAnalysis: async () => {
+        throw new Error("node unreachable");
+      },
+    };
+    const app = buildSellerApp({ ...cfg, baseUrl: "" }, failingEngine, { paymentGuard: passThrough });
+    const failingServer: ReturnType<ReturnType<typeof buildSellerApp>["listen"]> = await new Promise((resolve) => {
+      const s = app.listen(0, "127.0.0.1", () => resolve(s));
+    });
+    const addr = failingServer.address() as { port: number };
+    const failingBaseUrl = `http://127.0.0.1:${addr.port}`;
+    const mandate = { asset: "RLUSD", amount: 100000, horizon_hours: 72, minimum_liquidity: 0.5, maximum_risk_score: 30, maximum_protocol_allocation: 0.25 };
+    const res = await fetch(`${failingBaseUrl}/api/optimize_allocation`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(mandate),
+    });
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: "analysis failed", message: "node unreachable" });
+    await new Promise<void>((resolve) => failingServer.close(() => resolve()));
+  });
 });

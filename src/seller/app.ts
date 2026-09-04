@@ -42,7 +42,11 @@ export function buildSellerApp(cfg: SellerConfig, engine: SellerEngine, opts: { 
       res.status(400).json({ error: "invalid mandate", issues: parsed.error.issues });
       return;
     }
-    res.json(await engine.runAnalysis(parsed.data));
+    try {
+      res.json(await engine.runAnalysis(parsed.data));
+    } catch (err) {
+      res.status(500).json({ error: "analysis failed", message: err instanceof Error ? err.message : String(err) });
+    }
   });
 
   app.post("/mcp", async (req, res) => {
