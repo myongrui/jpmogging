@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>XRPL Financial Intelligence — Agent Audit Trail</title>
+<style>
+  :root { --bg:#0f1115; --card:#181b22; --ink:#e6e8ee; --dim:#8a90a2; --ok:#3ddc97; --warn:#ffb454; --bad:#ff6b6b; --pay:#7aa2ff; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.5 system-ui, sans-serif; }
+  header { padding:20px 28px; border-bottom:1px solid #262a35; display:flex; gap:16px; align-items:baseline; }
+  header h1 { margin:0; font-size:18px; }
+  header select { background:var(--card); color:var(--ink); border:1px solid #2c3140; padding:6px 10px; border-radius:6px; }
+  main { max-width:960px; margin:0 auto; padding:24px 28px; }
+  .ev { background:var(--card); border-left:4px solid var(--dim); border-radius:8px; padding:12px 16px; margin:10px 0; }
+  .ev.payment_settled { border-color:var(--pay); }
+  .ev.payment_required { border-color:var(--warn); }
+  .ev.payment_declined, .ev.error { border-color:var(--bad); }
+  .ev.decision, .ev.result { border-color:var(--ok); }
+  .t { color:var(--dim); font-size:12px; }
+  .k { font-weight:600; text-transform:uppercase; letter-spacing:.04em; font-size:12px; }
+  pre { margin:8px 0 0; white-space:pre-wrap; word-break:break-word; font-size:12px; color:#c9cede; }
+  a { color:var(--pay); }
+  table { border-collapse:collapse; margin-top:8px; }
+  td, th { padding:4px 10px 4px 0; text-align:left; }
+</style>
+</head>
+<body>
+<header><h1>XRPL Financial Intelligence</h1><span class="t">agent → MCP → x402 → XRPL → decision</span><select id="runs"></select></header>
+<main id="timeline"></main>
+<script>
+const runsEl = document.getElementById("runs");
+const timeline = document.getElementById("timeline");
+let current = null;
+
+function fmtAlloc(r) {
+  const rows = r.allocations.map(a => `<tr><td>${a.pairLabel}</td><td>${(a.weight*100).toFixed(0)}%</td><td>${a.amount.toLocaleString()} RLUSD</td><td>${(a.feeApy*100).toFixed(2)}%</td><td>${a.riskScore}</td><td>${a.liquidityScore}</td></tr>`).join("");
+  return `<table><tr><th>Pool</th><th>Weight</th><th>Amount</th><th>Fee APY</th><th>Risk</th><th>Liquidity</th></tr>${rows}<tr><td>Liquid</td><td>${(r.liquid_reserve.weight*100).toFixed(0)}%</td><td>${r.liquid_reserve.amount.toLocaleString()} RLUSD</td><td></td><td></td><td></td></tr></table>
+  <pre>expected APY ${(r.expected_apy*100).toFixed(2)}% · portfolio risk ${r.portfolio_risk_score.toFixed(1)} · ledger ${r.data.ledger_index} · valid until ${r.valid_until}\n${r.reasoning}</pre>`;
+}
+
+function render(records) {
+  timeline.innerHTML = records.map(({ seq, ts, event }) => {
+    let body = "";
+    if (event.type === "payment_settled") body = `<pre>tx <a href="${event.explorer}" target="_blank">${event.transaction}</a>\npayer ${event.payer} · ${event.amountDrops} drops · ${event.network}</pre>`;
+    else if (event.type === "result") body = fmtAlloc(event.result);
+    else if (event.type === "decision") body = `<pre>${event.action}\n\n${event.rationale}</pre>`;
+    else { const { type, ...rest } = event; body = `<pre>${JSON.stringify(rest, null, 1)}</pre>`; }
+    return `<div class="ev ${event.type}"><span class="k">${seq}. ${event.type}</span> <span class="t">${ts}</span>${body}</div>`;
+  }).join("");
+}
+
+async function loadRuns() {
+  const { runs } = await (await fetch("/api/runs")).json();
+  const prev = runsEl.value;
+  runsEl.innerHTML = runs.map(r => `<option value="${r}">${r}</option>`).join("");
+  runsEl.value = runs.includes(prev) ? prev : (runs[0] || "");
+  if (runsEl.value !== current) { current = runsEl.value; await loadRun(); }
+}
+async function loadRun() {
+  if (!runsEl.value) { timeline.innerHTML = "<p class='t'>No runs yet. Start the seller and run the buyer.</p>"; return; }
+  current = runsEl.value;
+  const { records } = await (await fetch(`/api/runs/${runsEl.value}`)).json();
+  render(records);
+}
+runsEl.addEventListener("change", loadRun);
+loadRuns();
+setInterval(async () => { await loadRuns(); if (current) await loadRun(); }, 2000);
+</script>
+</body>
+</html>
