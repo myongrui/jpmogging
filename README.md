@@ -70,7 +70,7 @@ tests/**/*.test.ts                   one test file per source module
 runs/                                JSONL audit logs (gitignored)
 ```
 
-The **seller** is an Express server exposing a stateless MCP endpoint at `/mcp` (discovery and a paid tool) plus an x402-guarded REST resource at `/api/optimize_allocation` that runs the intelligence engine. The **buyer** is a GPT-5.6 Sol tool-use loop whose tool list is built dynamically from MCP `listTools`, plus two local tools: `pay_for_resource` (x402 purchase under a spend policy) and `record_decision`. The **dashboard** serves an audit trail of every run written as JSONL.
+The **seller** is an Express server exposing a stateless MCP endpoint at `/mcp` (discovery and a paid tool) plus an x402-guarded REST resource at `/api/optimize_allocation` that runs the intelligence engine. The **buyer** is a GPT-5.6 Sol tool-use loop whose tool list is built dynamically from MCP `listTools`, plus two local tools: `pay_for_resource` (x402 purchase under a spend policy) and `record_decision`. The buyer calls the OpenAI Responses API with model `gpt-5.6-sol` (override with `OPENAI_MODEL`) and `reasoning.effort` set to `low`; its tool list is built at runtime from MCP `listTools` plus two local tools, `pay_for_resource` and `record_decision`. The **dashboard** serves an audit trail of every run written as JSONL.
 
 ## How MCP and x402 Divide the Work
 
@@ -131,7 +131,7 @@ npm test
 
 1. `npm install`: Install dependencies.
 2. `npm run setup:wallets`: Funds a seller wallet and a buyer wallet with 100 XRP each from the testnet faucet, writes `XRPL_PAY_TO` and `XRPL_BUYER_SEED` to `.env`.
-3. Set `OPENAI_API_KEY` in `.env` (required for the buyer agent).
+3. Set `OPENAI_API_KEY` in `.env` (required for the buyer agent). `OPENAI_MODEL` defaults to `gpt-5.6-sol`.
 4. `npm run seller` (shell 1): Start the MCP server and x402-guarded API on `http://127.0.0.1:8080`.
 5. `npm run dashboard` (shell 2): Start the audit-trail dashboard on `http://127.0.0.1:8090`.
 6. `npm run buyer` (shell 3): Run the buyer agent against the mandate in `mandates/treasury-100k.json`. The agent discovers tools via MCP, decides whether to pay, executes an x402 transaction if approved, receives the analysis, and records a decision.
