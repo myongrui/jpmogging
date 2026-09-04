@@ -145,7 +145,16 @@ npm test
 
 **Service pricing**: `optimize_allocation` costs 500,000 drops (0.5 XRP)
 
-**Live end-to-end run**: Pending: run `npm run buyer` with `OPENAI_API_KEY` set, then paste the `payment <hash> <explorer>` line printed by the buyer.
+**Live end-to-end run** (2026-09-04, run id `20260904T234325-a1f29c`):
+
+- Payment: 500,000 drops from the buyer wallet to the seller wallet, SourceTag 804681468, validated in testnet ledger 20490630 with result `tesSUCCESS`.
+- Transaction hash: `30C66AA9576837870B88984C5D649F2065E6AA40BA62B96D5D328E9258F4C756`
+- Explorer: https://testnet.xrpl.org/transactions/30C66AA9576837870B88984C5D649F2065E6AA40BA62B96D5D328E9258F4C756
+- Audit trail: `runs/20260904T234325-a1f29c.jsonl` (mandate, discovery, tool calls, `payment_required`, `payment_settled`, `result`, `decision`).
+- Purchased analysis: 12 mainnet pools considered, 11 rejected on risk or depth; XRP/RLUSD selected with fee APY 1.46%, risk score 20, liquidity score 97.
+- Agent decision: allocate 25,000 RLUSD (25%) to the XRP/RLUSD AMM pool and hold 75,000 RLUSD (75%) liquid, citing the 25% per-pool cap, the risk ceiling of 30, and the 50% liquidity floor.
+
+An earlier attempt in the same session failed verification with `verify_failed:source_tag_mismatch` until the seller advertised `extra.sourceTag`; the agent then recorded a hold-liquid decision, which is the intended behaviour when paid intelligence is unavailable.
 
 ## Trust and Safety
 
