@@ -1,0 +1,31 @@
+{
+  "name": "xrpl-financial-intelligence",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "setup:wallets": "tsx scripts/setup-wallets.ts",
+    "seller": "tsx src/seller/index.ts",
+    "buyer": "tsx src/buyer/index.ts mandates/treasury-100k.json",
+    "dashboard": "tsx src/dashboard/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "dotenv": "17.4.2",
+    "express": "5.2.1",
+    "openai": "7.10.0",
+    "x402-xrpl": "0.3.2",
+    "xrpl": "4.6.0",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.6",
+    "@types/node": "24.13.3",
+    "tsx": "4.23.13",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}
