@@ -12,6 +12,7 @@ export interface AgentDeps {
   audit: AuditLog;
   maxTurns?: number;
   log?: (line: string) => void;
+  spendSummary?: string;
 }
 
 const LOCAL_TOOLS: OpenAI.Responses.FunctionTool[] = [
@@ -78,7 +79,7 @@ export async function runAgentLoop(deps: AgentDeps, mandate: Mandate): Promise<{
   for (let turn = 0; turn < maxTurns; turn++) {
     const response = await deps.responses.create({
       model: deps.model,
-      instructions: SYSTEM_INSTRUCTIONS(mandate, "see pay_for_resource; limits are enforced by the wallet"),
+      instructions: SYSTEM_INSTRUCTIONS(mandate, deps.spendSummary ?? "limits are enforced by the wallet"),
       input,
       tools,
       reasoning: { effort: "low" },
@@ -89,7 +90,14 @@ export async function runAgentLoop(deps: AgentDeps, mandate: Mandate): Promise<{
     if (calls.length === 0 && response.output_text) log(`model: ${response.output_text}`);
 
     for (const call of calls) {
-      const args = JSON.parse(call.arguments || "{}") as Record<string, unknown>;
+      let args: Record<string, unknown>;
+      try {
+        args = JSON.parse(call.arguments || "{}") as Record<string, unknown>;
+      } catch {
+        deps.audit.append({ type: "error", message: `invalid arguments for ${call.name}` });
+        input.push({ type: "function_call_output", call_id: call.call_id, output: JSON.stringify({ error: "invalid JSON arguments" }) });
+        continue;
+      }
       deps.audit.append({ type: "tool_call", name: call.name, args });
       log(`tool_call ${call.name} ${JSON.stringify(args)}`);
 

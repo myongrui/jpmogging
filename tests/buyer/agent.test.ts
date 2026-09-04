@@ -15,11 +15,14 @@ function call(name: string, args: unknown, id: string) {
 function scriptedResponses(turns: unknown[][]) {
   let i = 0;
   const seenInputs: unknown[] = [];
+  const seenInstructions: unknown[] = [];
   return {
     seenInputs,
+    seenInstructions,
     responses: {
       create: async (params: any) => {
         seenInputs.push(params.input);
+        seenInstructions.push(params.instructions);
         const output = turns[i++] ?? [];
         return { output, output_text: "" } as any;
       },
@@ -74,5 +77,34 @@ describe("runAgentLoop", () => {
     const out = await runAgentLoop({ responses, model: "test", mcp, pay: async () => ({ status: "failed" as const, reason: "x" }), audit, maxTurns: 2 }, mandate);
     expect(out.action).toBe("no_decision");
     expect(readRun(dir, "run").at(-1)?.event.type).toBe("error");
+  });
+
+  it("logs an error and continues when the model emits malformed arguments", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agent-"));
+    const audit = new AuditLog(dir, "run");
+    const malformedCall = { type: "function_call", id: "fc_1", call_id: "1", name: "list_opportunities", arguments: "{not json", status: "completed" };
+    const { responses, seenInputs } = scriptedResponses([
+      [malformedCall],
+      [call("record_decision", { action: "hold", rationale: "bad args" }, "2")],
+    ]);
+
+    const out = await runAgentLoop({ responses, model: "test", mcp, pay: async () => ({ status: "failed" as const, reason: "x" }), audit }, mandate);
+    expect(out).toEqual({ action: "hold", rationale: "bad args" });
+    expect(readRun(dir, "run").map((r) => r.event.type)).toEqual(["mandate", "discovery", "error", "tool_call", "decision"]);
+    const second = seenInputs[1] as any[];
+    const outputs = second.filter((i) => i.type === "function_call_output");
+    expect(outputs).toHaveLength(1);
+    expect(outputs[0].output).toBe(JSON.stringify({ error: "invalid JSON arguments" }));
+  });
+
+  it("passes the caller's spend summary into the instructions", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agent-"));
+    const audit = new AuditLog(dir, "run");
+    const { responses, seenInstructions } = scriptedResponses([
+      [call("record_decision", { action: "hold", rationale: "no opportunity" }, "1")],
+    ]);
+
+    await runAgentLoop({ responses, model: "test", mcp, pay: async () => ({ status: "failed" as const, reason: "x" }), audit, spendSummary: "max 1000000 drops per request" }, mandate);
+    expect(seenInstructions[0]).toContain("max 1000000 drops per request");
   });
 });
