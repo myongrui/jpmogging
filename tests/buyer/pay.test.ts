@@ -37,7 +37,11 @@ describe("payForResource", () => {
   it("declines before signing when the policy is exceeded", async () => {
     const { dir, audit, tracker } = setup(100n);
     const purchase = (async (opts: any) => {
-      opts.paymentRequirementsSelector(accepts, "xrpl:1", "exact", opts.maxValue);
+      try {
+        opts.paymentRequirementsSelector(accepts, "xrpl:1", "exact", opts.maxValue);
+      } catch (err) {
+        return { status: "payment_required", reason: (err as Error).message };
+      }
       throw new Error("selector should have thrown first");
     }) as any;
 
@@ -53,5 +57,18 @@ describe("payForResource", () => {
     const out = await payForResource({ wallet, network: "xrpl:1", tracker, audit, purchase }, { resource: "http://s/api/x", body: {} });
     expect(out).toEqual({ status: "failed", reason: "settle rejected" });
     expect(readRun(dir, "run").at(-1)?.event.type).toBe("error");
+  });
+
+  it("returns paid with the raw text when the body is not JSON", async () => {
+    const { dir, audit, tracker } = setup();
+    const purchase = (async (opts: any) => {
+      opts.paymentRequirementsSelector(accepts, "xrpl:1", "exact", opts.maxValue);
+      return { status: "success", transaction: "TX2", payer: wallet.classicAddress, network: "xrpl:1", response: new Response("not json") };
+    }) as any;
+
+    const out = await payForResource({ wallet, network: "xrpl:1", tracker, audit, purchase }, { resource: "http://s/api/x", body: {} });
+    expect(out).toEqual({ status: "paid", transaction: "TX2", payer: wallet.classicAddress, explorer: "https://testnet.xrpl.org/transactions/TX2", body: "not json" });
+    expect(tracker.spentDrops).toBe(500_000n);
+    expect(readRun(dir, "run").map((r) => r.event.type)).toEqual(["payment_required", "payment_settled"]);
   });
 });

@@ -22,6 +22,7 @@ class SpendDeclined extends Error {}
 export async function payForResource(deps: PayDeps, input: { resource: string; body: unknown }): Promise<PayOutcome> {
   const purchase = deps.purchase ?? x402Purchase;
   let amountDrops = "0";
+  let declinedReason: string | undefined;
 
   const paymentRequirementsSelector: typeof defaultPaymentRequirementsSelector = (accepts, networkFilter, schemeFilter, maxValue) => {
     const selected = defaultPaymentRequirementsSelector(accepts, networkFilter, schemeFilter, maxValue);
@@ -35,12 +36,16 @@ export async function payForResource(deps: PayDeps, input: { resource: string; b
       payTo: String(selected.payTo),
     });
     const verdict = deps.tracker.authorize(amountDrops);
-    if (!verdict.ok) throw new SpendDeclined(verdict.reason);
+    if (!verdict.ok) {
+      declinedReason = verdict.reason;
+      throw new SpendDeclined(verdict.reason);
+    }
     return selected;
   };
 
+  let result: Awaited<ReturnType<typeof purchase>> | undefined;
   try {
-    const result = await purchase({
+    result = await purchase({
       url: input.resource,
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json" },
@@ -49,28 +54,40 @@ export async function payForResource(deps: PayDeps, input: { resource: string; b
       network: deps.network as "xrpl:1" | "xrpl:0",
       paymentRequirementsSelector,
     });
-    if (result.status !== "success" || !result.response || !result.transaction) {
-      deps.audit.append({ type: "error", message: `payment ${result.status}: ${result.reason ?? "unknown"}` });
-      return { status: "failed", reason: result.reason ?? result.status };
-    }
-    deps.tracker.record(amountDrops);
-    const explorer = explorerTxUrl(result.transaction);
-    deps.audit.append({
-      type: "payment_settled",
-      transaction: result.transaction,
-      payer: result.payer ?? deps.wallet.classicAddress,
-      amountDrops,
-      network: result.network ?? deps.network,
-      explorer,
-    });
-    return { status: "paid", transaction: result.transaction, payer: result.payer ?? deps.wallet.classicAddress, explorer, body: await result.response.json() };
   } catch (err) {
-    if (err instanceof SpendDeclined) {
-      deps.audit.append({ type: "payment_declined", resource: input.resource, reason: err.message });
-      return { status: "declined", reason: err.message };
+    if (!(err instanceof SpendDeclined)) {
+      const message = err instanceof Error ? err.message : String(err);
+      deps.audit.append({ type: "error", message });
+      return { status: "failed", reason: message };
     }
-    const message = err instanceof Error ? err.message : String(err);
-    deps.audit.append({ type: "error", message });
-    return { status: "failed", reason: message };
   }
+
+  if (declinedReason) {
+    deps.audit.append({ type: "payment_declined", resource: input.resource, reason: declinedReason });
+    return { status: "declined", reason: declinedReason };
+  }
+
+  if (!result || result.status !== "success" || !result.response || !result.transaction) {
+    deps.audit.append({ type: "error", message: `payment ${result?.status}: ${result?.reason ?? "unknown"}` });
+    return { status: "failed", reason: result?.reason ?? result?.status ?? "unknown" };
+  }
+
+  deps.tracker.record(amountDrops);
+  const explorer = explorerTxUrl(result.transaction);
+  const text = await result.response.text();
+  let body: unknown;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    body = text;
+  }
+  deps.audit.append({
+    type: "payment_settled",
+    transaction: result.transaction,
+    payer: result.payer ?? deps.wallet.classicAddress,
+    amountDrops,
+    network: result.network ?? deps.network,
+    explorer,
+  });
+  return { status: "paid", transaction: result.transaction, payer: result.payer ?? deps.wallet.classicAddress, explorer, body };
 }
