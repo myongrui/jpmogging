@@ -4,13 +4,20 @@ import { dirname, join, resolve } from "node:path";
 import express, { type Express } from "express";
 import { listRuns, readRun } from "../shared/audit.js";
 
+const RUN_ID = /^[A-Za-z0-9_-]+$/;
+
 export function buildDashboardApp(runsDir: string): Express {
   const app = express();
   app.get("/api/runs", (_req, res) => {
     res.json({ runs: listRuns(runsDir) });
   });
   app.get("/api/runs/:id", (req, res) => {
-    res.json({ records: readRun(runsDir, String(req.params.id)) });
+    const id = String(req.params.id);
+    if (!RUN_ID.test(id)) {
+      res.status(400).json({ error: "invalid run id" });
+      return;
+    }
+    res.json({ records: readRun(runsDir, id) });
   });
   app.use(express.static(join(dirname(fileURLToPath(import.meta.url)), "public")));
   return app;

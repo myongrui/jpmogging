@@ -32,4 +32,12 @@ describe("dashboard api", () => {
     expect(res.status).toBe(200);
     expect(await res.text()).toContain("XRPL Financial Intelligence");
   });
+  it("rejects run ids that are not plain identifiers", async () => {
+    const res1 = await fetch(`${base}/api/runs/..%2F..%2Fetc`);
+    expect(res1.status).toBe(400);
+    expect(await res1.json()).toEqual({ error: "invalid run id" });
+    const res2 = await fetch(`${base}/api/runs/bad%20id`);
+    expect(res2.status).toBe(400);
+    expect(await res2.json()).toEqual({ error: "invalid run id" });
+  });
 });
