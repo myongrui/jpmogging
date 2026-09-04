@@ -77,7 +77,7 @@ describe("payForResource", () => {
     expect(tracker.spentDrops).toBe(500_000n);
     const records = readRun(dir, "run");
     expect(records.map((r) => r.event.type)).toEqual(["payment_required", "payment_settled", "error"]);
-    expect(records[1].event).toMatchObject({ transaction: "TX3", payer: wallet.classicAddress, amountDrops: "500000" });
+    expect(records[1].event).toMatchObject({ transaction: "TX3", payer: wallet.classicAddress, amountDrops: "500000", payTo: "rSeller" });
     expect(records[2].event).toMatchObject({ message: expect.stringContaining("analysis failed") });
   });
 

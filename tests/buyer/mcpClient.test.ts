@@ -37,6 +37,11 @@ describe("mcp bridge", () => {
     await bridge.close();
   });
 
+  it("drops $schema from tool parameters", () => {
+    const [tool] = mcpToolsToOpenAiTools([{ name: "t", inputSchema: { $schema: "https://json-schema.org/draft/2020-12/schema", type: "object", properties: {} } }]);
+    expect(tool.parameters).toEqual({ type: "object", properties: {} });
+  });
+
   it("calls a tool and parses JSON text", async () => {
     const bridge = await connectMcp(url);
     expect(await bridge.callTool("list_opportunities", {})).toEqual([{ ammAccount: "rA", pairLabel: "XRP/RLUSD", tvlXrp: 1, tradingFeeBps: 2 }]);

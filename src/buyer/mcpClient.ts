@@ -37,11 +37,8 @@ export async function connectMcp(url: string): Promise<McpBridge> {
 }
 
 export function mcpToolsToOpenAiTools(tools: McpTool[]): OpenAI.Responses.FunctionTool[] {
-  return tools.map((t) => ({
-    type: "function",
-    name: t.name,
-    description: t.description ?? "",
-    parameters: t.inputSchema,
-    strict: false,
-  }));
+  return tools.map((t) => {
+    const { $schema, ...parameters } = t.inputSchema;
+    return { type: "function", name: t.name, description: t.description ?? "", parameters, strict: false };
+  });
 }

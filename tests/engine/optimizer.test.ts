@@ -65,6 +65,13 @@ describe("optimizeAllocation", () => {
     expect(r.portfolio_liquidity_score).toBe(100);
   });
 
+  it("holds everything liquid when the per-protocol cap is zero", () => {
+    const r = optimizeAllocation({ ...mandate, maximum_protocol_allocation: 0 }, [pool({})], ctx);
+    expect(r.recommendation).toBe("hold_liquid");
+    expect(r.allocations).toEqual([]);
+    expect(r.liquid_reserve).toEqual({ weight: 1, amount: 100000 });
+  });
+
   it("returns leftover deployable capital to the reserve when few pools qualify", () => {
     const r = optimizeAllocation(mandate, [pool({ pairLabel: "XRP/ONLY" })], ctx);
     expect(r.allocations).toHaveLength(1);

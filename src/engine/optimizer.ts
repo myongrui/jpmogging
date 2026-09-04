@@ -16,7 +16,7 @@ export function optimizeAllocation(
   const cap = mandate.amount * mandate.maximum_protocol_allocation;
   const allocations: AllocationLine[] = [];
   for (const p of eligible) {
-    if (deployable <= 0) break;
+    if (deployable <= 0 || cap <= 0) break;
     const amount = Math.min(cap, deployable);
     deployable -= amount;
     allocations.push({

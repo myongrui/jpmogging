@@ -34,9 +34,9 @@ const timeline = document.getElementById("timeline");
 let current = null;
 
 function fmtAlloc(r) {
-  const rows = r.allocations.map(a => `<tr><td>${esc(a.pairLabel)}</td><td>${(a.weight*100).toFixed(0)}%</td><td>${a.amount.toLocaleString()} RLUSD</td><td>${(a.feeApy*100).toFixed(2)}%</td><td>${a.riskScore}</td><td>${a.liquidityScore}</td></tr>`).join("");
-  return `<table><tr><th>Pool</th><th>Weight</th><th>Amount</th><th>Fee APY</th><th>Risk</th><th>Liquidity</th></tr>${rows}<tr><td>Liquid</td><td>${(r.liquid_reserve.weight*100).toFixed(0)}%</td><td>${r.liquid_reserve.amount.toLocaleString()} RLUSD</td><td></td><td></td><td></td></tr></table>
-  <pre>expected APY ${(r.expected_apy*100).toFixed(2)}% · portfolio risk ${r.portfolio_risk_score.toFixed(1)} · ledger ${esc(r.data.ledger_index)} · valid until ${esc(r.valid_until)}\n${esc(r.reasoning)}</pre>`;
+  const rows = r.allocations.map(a => `<tr><td>${esc(a.pairLabel)}</td><td>${esc((a.weight*100).toFixed(0))}%</td><td>${esc(a.amount.toLocaleString())} RLUSD</td><td>${esc((a.feeApy*100).toFixed(2))}%</td><td>${esc(a.riskScore)}</td><td>${esc(a.liquidityScore)}</td></tr>`).join("");
+  return `<table><tr><th>Pool</th><th>Weight</th><th>Amount</th><th>Fee APY</th><th>Risk</th><th>Liquidity</th></tr>${rows}<tr><td>Liquid</td><td>${esc((r.liquid_reserve.weight*100).toFixed(0))}%</td><td>${esc(r.liquid_reserve.amount.toLocaleString())} RLUSD</td><td></td><td></td><td></td></tr></table>
+  <pre>expected APY ${esc((r.expected_apy*100).toFixed(2))}% · portfolio risk ${esc(r.portfolio_risk_score.toFixed(1))} · ledger ${esc(r.data.ledger_index)} · valid until ${esc(r.valid_until)}\n${esc(r.reasoning)}</pre>`;
 }
 
 function render(records) {
@@ -44,9 +44,9 @@ function render(records) {
     let body = "";
     if (event.type === "payment_settled") {
       const txLink = String(event.explorer).startsWith("https://testnet.xrpl.org/") ? `<a href="${esc(event.explorer)}" target="_blank">${esc(event.transaction)}</a>` : esc(event.transaction);
-      body = `<pre>tx ${txLink}\npayer ${esc(event.payer)} · ${esc(event.amountDrops)} drops · ${esc(event.network)}</pre>`;
+      body = `<pre>tx ${txLink}\npayer ${esc(event.payer)} → ${esc(event.payTo)} · ${esc(event.amountDrops)} drops · ${esc(event.network)}</pre>`;
     }
-    else if (event.type === "result") body = fmtAlloc(event.result);
+    else if (event.type === "result" && Array.isArray(event.result?.allocations)) body = fmtAlloc(event.result);
     else if (event.type === "decision") body = `<pre>${esc(event.action)}\n\n${esc(event.rationale)}</pre>`;
     else { const { type, ...rest } = event; body = `<pre>${esc(JSON.stringify(rest, null, 1))}</pre>`; }
     return `<div class="ev ${esc(event.type)}"><span class="k">${seq}. ${esc(event.type)}</span> <span class="t">${esc(ts)}</span>${body}</div>`;

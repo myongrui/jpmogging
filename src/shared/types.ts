@@ -66,7 +66,7 @@ export type AuditEvent =
   | { type: "tool_call"; name: string; args: unknown }
   | { type: "tool_result"; name: string; result: unknown }
   | { type: "payment_required"; resource: string; amountDrops: string; asset: string; network: string; payTo: string }
-  | { type: "payment_settled"; transaction: string; payer: string; amountDrops: string; network: string; explorer: string }
+  | { type: "payment_settled"; transaction: string; payer: string; amountDrops: string; network: string; explorer: string; payTo: string }
   | { type: "payment_declined"; resource: string; reason: string }
   | { type: "result"; result: AllocationResult }
   | { type: "decision"; action: string; rationale: string }

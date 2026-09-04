@@ -22,18 +22,20 @@ class SpendDeclined extends Error {}
 export async function payForResource(deps: PayDeps, input: { resource: string; body: unknown }): Promise<PayOutcome> {
   const purchase = deps.purchase ?? x402Purchase;
   let amountDrops = "0";
+  let payTo = "";
   let declinedReason: string | undefined;
 
   const paymentRequirementsSelector: typeof defaultPaymentRequirementsSelector = (accepts, networkFilter, schemeFilter, maxValue) => {
     const selected = defaultPaymentRequirementsSelector(accepts, networkFilter, schemeFilter, maxValue);
     amountDrops = String(selected.amount);
+    payTo = String(selected.payTo);
     deps.audit.append({
       type: "payment_required",
       resource: input.resource,
       amountDrops,
       asset: String(selected.asset),
       network: String(selected.network),
-      payTo: String(selected.payTo),
+      payTo,
     });
     const verdict = deps.tracker.authorize(amountDrops);
     if (!verdict.ok) {
@@ -79,6 +81,7 @@ export async function payForResource(deps: PayDeps, input: { resource: string; b
         amountDrops,
         network: settlement.network || deps.network,
         explorer: explorerTxUrl(settlement.transaction),
+        payTo,
       });
       const message = `seller returned HTTP ${result.response.status} after payment settled: ${await result.response.text()}`;
       deps.audit.append({ type: "error", message });
@@ -107,6 +110,7 @@ export async function payForResource(deps: PayDeps, input: { resource: string; b
     amountDrops,
     network: result.network ?? deps.network,
     explorer,
+    payTo,
   });
   return { status: "paid", transaction: result.transaction, payer: result.payer ?? deps.wallet.classicAddress, explorer, body };
 }
