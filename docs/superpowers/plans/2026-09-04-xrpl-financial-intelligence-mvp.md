@@ -1338,7 +1338,8 @@ describe("seller MCP server", () => {
 
   it("rejects an invalid mandate", async () => {
     const client = await connect();
-    await expect(client.callTool({ name: "optimize_allocation", arguments: { asset: "RLUSD", amount: -1 } })).rejects.toThrow();
+    const res: any = await client.callTool({ name: "optimize_allocation", arguments: { asset: "RLUSD", amount: -1 } });
+    expect(res.isError).toBe(true);
   });
 });
 ```
@@ -1433,7 +1434,7 @@ export function buildMcpServer(cfg: SellerConfig, engine: SellerEngine): McpServ
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run tests/seller/mcp.test.ts`
-Expected: PASS (4 tests). The invalid-mandate case relies on the SDK's zod validation rejecting the call with an InvalidParams JSON-RPC error, which `callTool` surfaces as a thrown error.
+Expected: PASS (4 tests). The invalid-mandate case relies on the SDK's zod validation returning a tool result with `isError: true` (SDK 1.30 catches InvalidParams inside the tool handler rather than rejecting the call).
 
 - [ ] **Step 5: Commit**
 
