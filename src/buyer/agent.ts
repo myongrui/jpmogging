@@ -109,14 +109,20 @@ export async function runAgentLoop(deps: AgentDeps, mandate: Mandate): Promise<{
       }
 
       let result: unknown;
-      if (call.name === "pay_for_resource") {
-        const outcome = await deps.pay({ resource: String(args.resource), body: args.body });
-        if (outcome.status === "paid") deps.audit.append({ type: "result", result: outcome.body as AllocationResult });
-        result = outcome;
-      } else if (mcpNames.has(call.name)) {
-        result = await deps.mcp.callTool(call.name, args);
-      } else {
-        result = { error: `unknown tool ${call.name}` };
+      try {
+        if (call.name === "pay_for_resource") {
+          const outcome = await deps.pay({ resource: String(args.resource), body: args.body });
+          if (outcome.status === "paid") deps.audit.append({ type: "result", result: outcome.body as AllocationResult });
+          result = outcome;
+        } else if (mcpNames.has(call.name)) {
+          result = await deps.mcp.callTool(call.name, args);
+        } else {
+          result = { error: `unknown tool ${call.name}` };
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        deps.audit.append({ type: "error", message: `${call.name} failed: ${message}` });
+        result = { error: message };
       }
 
       deps.audit.append({ type: "tool_result", name: call.name, result });

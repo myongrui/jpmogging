@@ -97,6 +97,24 @@ describe("runAgentLoop", () => {
     expect(outputs[0].output).toBe(JSON.stringify({ error: "invalid JSON arguments" }));
   });
 
+  it("logs an error and continues when a tool throws", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agent-"));
+    const audit = new AuditLog(dir, "run");
+    const throwingMcp = { ...mcp, callTool: async () => { throw new Error("boom"); } };
+    const { responses, seenInputs } = scriptedResponses([
+      [call("list_opportunities", {}, "1")],
+      [call("record_decision", { action: "hold", rationale: "tool failed" }, "2")],
+    ]);
+
+    const out = await runAgentLoop({ responses, model: "test", mcp: throwingMcp, pay: async () => ({ status: "failed" as const, reason: "x" }), audit }, mandate);
+    expect(out).toEqual({ action: "hold", rationale: "tool failed" });
+    expect(readRun(dir, "run").map((r) => r.event.type)).toEqual(["mandate", "discovery", "tool_call", "error", "tool_result", "tool_call", "decision"]);
+    const second = seenInputs[1] as any[];
+    const outputs = second.filter((i) => i.type === "function_call_output");
+    expect(outputs).toHaveLength(1);
+    expect(outputs[0].output).toBe(JSON.stringify({ error: "boom" }));
+  });
+
   it("passes the caller's spend summary into the instructions", async () => {
     const dir = mkdtempSync(join(tmpdir(), "agent-"));
     const audit = new AuditLog(dir, "run");

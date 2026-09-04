@@ -43,6 +43,9 @@ try {
     },
     mandate,
   );
+} catch (err) {
+  audit.append({ type: "error", message: err instanceof Error ? err.message : String(err) });
+  throw err;
 } finally {
   await mcp.close();
 }
