@@ -37,14 +37,18 @@ export function buildSellerApp(cfg: SellerConfig, engine: SellerEngine, opts: { 
     });
   });
 
-  app.post(OPTIMIZE_PATH, guard, async (req, res) => {
+  const validateMandate: RequestHandler = (req, res, next) => {
     const parsed = mandateSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: "invalid mandate", issues: parsed.error.issues });
       return;
     }
+    next();
+  };
+
+  app.post(OPTIMIZE_PATH, validateMandate, guard, async (req, res) => {
     try {
-      res.json(await engine.runAnalysis(parsed.data));
+      res.json(await engine.runAnalysis(mandateSchema.parse(req.body)));
     } catch (err) {
       res.status(500).json({ error: "analysis failed", message: err instanceof Error ? err.message : String(err) });
     }

@@ -78,12 +78,14 @@ describe("seller app", () => {
   });
 
   it("rejects a malformed mandate with 400", async () => {
+    seen = [];
     const res = await fetch(`${baseUrl}/api/optimize_allocation`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ asset: "RLUSD" }),
     });
     expect(res.status).toBe(400);
+    expect(seen).toEqual([]);
   });
 
   it("publishes a catalog", async () => {
