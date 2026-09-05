@@ -1,4 +1,4 @@
-import { quoteFor, type StrategyProfile, type StrategyQuote } from "../platform/strategy.js";
+import { quoteFor, type StrategyProfile, type StrategyQuote } from "./strategy.js";
 
 /**
  * Tracks how much capital a strategy has committed, so the APY and capacity it

@@ -13,7 +13,10 @@ export interface StrategyProfile {
   capacity: number;
   riskScore: number;
   exitHours: number;
-  priceDrops: string;
+  /** Ceiling this strategy applies to individual pools, on top of the mandate's. */
+  maxPoolRisk: number;
+  /** XRPL address the strategy author is paid out to. */
+  payoutAddress: string;
   /** Amendments this strategy's execution needs. */
   requires: string[];
 }

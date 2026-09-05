@@ -6,6 +6,9 @@
   "capacity": 100000,
   "riskScore": 22,
   "exitHours": 1,
-  "priceDrops": "500000",
-  "requires": ["AMM"]
+  "requires": [
+    "AMM"
+  ],
+  "maxPoolRisk": 25,
+  "payoutAddress": "rAlphaStrategyAuthorAddressPlaceholder"
 }

@@ -1,27 +1,17 @@
 import type { AmendmentState } from "../execute/amendments.js";
 import type { Mandate } from "../shared/types.js";
 import { splitCapital, type AllocationLeg, type Rejection } from "./allocate.js";
-import { mcpEndpoint, quoteEndpoint, type SellerListing } from "./registry.js";
-import { quoteFor, type StrategyQuote } from "./strategy.js";
-
-export interface OrchestratedLeg extends AllocationLeg {
-  endpoint: string;
-  priceDrops: string;
-  /** False when the seller did not answer and its listed figures were used. */
-  quoteLive: boolean;
-}
+import type { StrategyProfile, StrategyQuote } from "./strategy.js";
 
 export interface Orchestration {
   band: "conservative" | "moderate" | "aggressive";
-  legs: OrchestratedLeg[];
+  legs: AllocationLeg[];
   rejected: Rejection[];
   deployed: number;
   reserve: number;
   blendedApy: number;
   unplaced: number;
   reasoning: string;
-  /** Sellers that did not answer a quote request. */
-  staleQuotes: string[];
 }
 
 export function riskBand(mandate: Mandate): Orchestration["band"] {
@@ -31,85 +21,45 @@ export function riskBand(mandate: Mandate): Orchestration["band"] {
 }
 
 /**
- * Asks every listed seller what it is paying right now and how much room it has
- * left. A seller that does not answer falls back to its listed figures, marked
- * as stale rather than silently trusted.
+ * Splits a mandate across the platform's strategies by marginal yield.
+ *
+ * Strategies whose amendments are not enabled on this network are dropped
+ * before allocation, because a plan nobody can execute is not a match.
  */
-export async function fetchQuotes(
-  listings: SellerListing[],
-  fetchImpl: typeof fetch = fetch,
-  timeoutMs = 2500,
-): Promise<{ quotes: StrategyQuote[]; stale: string[] }> {
-  const quotes: StrategyQuote[] = [];
-  const stale: string[] = [];
-
-  await Promise.all(
-    listings.map(async (l) => {
-      try {
-        const res = await fetchImpl(quoteEndpoint(l), {
-          headers: { accept: "application/json" },
-          signal: AbortSignal.timeout(timeoutMs),
-        });
-        if (!res.ok) throw new Error(`status ${res.status}`);
-        quotes.push((await res.json()) as StrategyQuote);
-      } catch {
-        stale.push(l.id);
-        quotes.push(quoteFor(l, 0));
-      }
-    }),
-  );
-
-  return { quotes, stale };
-}
-
-/**
- * The platform's product: a capacity-aware split across sellers, priced off
- * live quotes. Strategies whose amendments are not enabled on this network are
- * dropped before allocation, because a plan nobody can execute is not a match.
- */
-export async function orchestrate(
+export function orchestrate(
   mandate: Mandate,
-  listings: SellerListing[],
+  profiles: StrategyProfile[],
+  quotes: StrategyQuote[],
   amendments: AmendmentState,
-  fetchImpl: typeof fetch = fetch,
-): Promise<Orchestration> {
-  const supported: SellerListing[] = [];
+): Orchestration {
   const rejected: Rejection[] = [];
+  const supported: StrategyQuote[] = [];
+  const byId = new Map(profiles.map((p) => [p.id, p]));
 
-  for (const l of listings) {
+  for (const q of quotes) {
+    const profile = byId.get(q.id);
+    if (!profile) continue;
     if (!amendments.known) {
-      rejected.push({ sellerId: l.id, name: l.name, reason: "amendment state unknown on this network" });
+      rejected.push({ sellerId: q.id, name: q.name, reason: "amendment state unknown on this network" });
       continue;
     }
-    const missing = l.requires.filter((a) => !amendments.enabled.has(a));
+    const missing = profile.requires.filter((a) => !amendments.enabled.has(a));
     if (missing.length) {
-      rejected.push({ sellerId: l.id, name: l.name, reason: `requires ${missing.join(", ")}, not enabled on this network` });
+      rejected.push({ sellerId: q.id, name: q.name, reason: `requires ${missing.join(", ")}, not enabled on this network` });
       continue;
     }
-    supported.push(l);
+    supported.push(q);
   }
 
-  const { quotes, stale } = await fetchQuotes(supported, fetchImpl);
-  const split = splitCapital(mandate, quotes);
-  const byId = new Map(supported.map((l) => [l.id, l]));
-
+  const split = splitCapital(mandate, supported);
   return {
     band: riskBand(mandate),
-    legs: split.legs.map((leg) => {
-      const listing = byId.get(leg.sellerId)!;
-      return {
-        ...leg,
-        endpoint: mcpEndpoint(listing),
-        priceDrops: listing.priceDrops,
-        quoteLive: !stale.includes(leg.sellerId),
-      };
-    }),
+    legs: split.legs,
     rejected: [...rejected, ...split.rejected],
     deployed: split.deployed,
     reserve: split.reserve,
     blendedApy: split.blendedApy,
     unplaced: split.unplaced,
     reasoning: split.reasoning,
-    staleQuotes: stale,
   };
 }

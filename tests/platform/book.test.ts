@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { CapacityBook } from "../../src/seller/book.js";
+import { CapacityBook } from "../../src/platform/book.js";
 import type { StrategyProfile } from "../../src/platform/strategy.js";
 
 const profile: StrategyProfile = {
   id: "alpha", name: "Alpha Deep LP", family: "amm_lp",
   headlineApy: 0.05, capacity: 100000,
-  riskScore: 22, exitHours: 1, priceDrops: "500000", requires: ["AMM"],
+  riskScore: 22, exitHours: 1, maxPoolRisk: 40, payoutAddress: "rAuthor", requires: ["AMM"],
 };
 
 describe("CapacityBook", () => {

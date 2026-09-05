@@ -20,7 +20,7 @@ const LOCAL_TOOLS: OpenAI.Responses.FunctionTool[] = [
   {
     type: "function",
     name: "pay_for_resource",
-    description: "Pay for a payment_required resource with x402 on XRPL testnet and return its body. Only call this after a tool returned status payment_required and you judged the analysis worth its price.",
+    description: "Pay for a payment_required resource with x402 on XRPL and return its body. Only call this after a tool returned status payment_required and you judged the allocation worth its price.",
     parameters: {
       type: "object",
       properties: {
@@ -54,7 +54,7 @@ export function SYSTEM_INSTRUCTIONS(mandate: Mandate, spendSummary: string): str
     "You are an autonomous treasury agent for a payments business holding RLUSD on the XRP Ledger.",
     "Your objective is to decide what to do with temporarily idle capital under a strict mandate.",
     `Mandate: ${JSON.stringify(mandate)}.`,
-    "You do not have your own market data. External financial-intelligence tools are available via MCP; some are paid via x402.",
+    "You do not have your own market data. A strategy marketplace is available via MCP; listing strategies is free, and the allocation is paid via x402.",
     `Spend policy: ${spendSummary}. Never attempt a payment above these limits.`,
     "Workflow: inspect the free tools first, decide whether paid analysis is worth its price for this mandate, pay only if so, then interpret the result against the mandate and record one concrete decision with record_decision.",
     "If a payment is declined or fails, do not retry more than once; decide with the information you have.",
@@ -124,8 +124,9 @@ export async function runAgentLoop(deps: AgentDeps, mandate: Mandate): Promise<A
           if (outcome.status === "paid") {
             const body = outcome.body as AllocationResult;
             deps.audit.append({ type: "result", result: body });
-            if (body?.plan) {
-              plan = body.plan;
+            const plans = body as unknown as { plan?: typeof plan };
+            if (plans?.plan) {
+              plan = plans.plan;
               deps.audit.append({
                 type: "plan_received",
                 planId: plan.planId,

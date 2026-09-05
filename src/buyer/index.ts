@@ -18,7 +18,7 @@ if (!seed) throw new Error("XRPL_BUYER_SEED is required");
 if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is required");
 
 const mandate = JSON.parse(readFileSync(mandatePath, "utf8")) as Mandate;
-const sellerBaseUrl = process.env.SELLER_BASE_URL ?? "http://127.0.0.1:8080";
+const platformBaseUrl = process.env.PLATFORM_BASE_URL ?? "http://127.0.0.1:8081";
 const network = process.env.XRPL_NETWORK ?? "xrpl:1";
 const wallet = Wallet.fromSeed(seed);
 const policy = policyFromEnv(process.env);
@@ -34,7 +34,7 @@ console.log(`buyer wallet ${wallet.classicAddress} on ${network}`);
 console.log(`spend policy ${policy.maxDropsPerRequest} drops/request, ${policy.maxDropsPerSession} drops/session`);
 console.log(`execution ${shouldExecute ? "ENABLED" : "disabled (set BUYER_EXECUTE=true to allocate)"}`);
 
-const mcp = await connectMcp(`${sellerBaseUrl}/mcp`);
+const mcp = await connectMcp(`${platformBaseUrl}/mcp`);
 let decision: Awaited<ReturnType<typeof runAgentLoop>>;
 try {
   decision = await runAgentLoop(

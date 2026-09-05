@@ -5,7 +5,7 @@ import type { Mandate } from "../../src/shared/types.js";
 
 const profile = (id: string, headlineApy: number, capacity: number, riskScore = 20): StrategyProfile => ({
   id, name: id, family: "amm_lp", headlineApy, capacity, riskScore,
-  exitHours: 1, priceDrops: "500000", requires: ["AMM"],
+  exitHours: 1, maxPoolRisk: 40, payoutAddress: "rAuthor", requires: ["AMM"],
 });
 
 const mandate = (over: Partial<Mandate> = {}): Mandate => ({

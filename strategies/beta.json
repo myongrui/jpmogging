@@ -6,6 +6,9 @@
   "capacity": 200000,
   "riskScore": 26,
   "exitHours": 2,
-  "priceDrops": "400000",
-  "requires": ["AMM"]
+  "requires": [
+    "AMM"
+  ],
+  "maxPoolRisk": 45,
+  "payoutAddress": "rBetaStrategyAuthorAddressPlaceholder"
 }
