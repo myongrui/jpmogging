@@ -1,9 +1,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import * as z from "zod/v4";
 import { MANDATE_SHAPE } from "../shared/mandate.js";
 import type { Mandate } from "../shared/types.js";
 import type { MarketplacePlan } from "./marketplacePlan.js";
 import type { Orchestration } from "./orchestrate.js";
 import type { StrategyQuote } from "./strategy.js";
+import type { PreparedPayment } from "./x402Bridge.js";
 
 export interface PlatformConfig {
   payTo: string;
@@ -28,6 +30,10 @@ export interface PlatformEngine {
   ready(): boolean;
   /** Books a listing fee once payment has settled. */
   recordListingFee(): void;
+  /** Turns a 402 challenge into a transaction a wallet can sign. */
+  preparePayment(resource: string, payer: string, body?: unknown): Promise<PreparedPayment>;
+  /** Claims the paid resource with a signed, unsubmitted payment. */
+  completePayment(paymentId: string, signedTxBlob: string, body?: unknown): Promise<unknown>;
 }
 
 export const ALLOCATE_DESCRIPTION = "Capacity-aware allocation across listed strategies, with signable XRPL transactions";
@@ -90,6 +96,40 @@ export function buildPlatformMcpServer(cfg: PlatformConfig, engine: PlatformEngi
         input: mandate,
       };
       return { content: [{ type: "text", text: JSON.stringify(envelope) }] };
+    },
+  );
+
+  server.registerTool(
+    "prepare_payment",
+    {
+      description:
+        "Free. Turns a payment_required resource into a signable transaction. Give it the resource URL from a payment_required envelope and your XRPL address; it fetches the 402 challenge and returns an unsigned, autofilled Payment carrying the challenge's invoice id, source tag and ledger deadline. SIGN IT BUT DO NOT SUBMIT IT — x402 settles the payment through the facilitator, so submitting it yourself spends the XRP without paying for the resource. Pass the resulting signed transaction blob to complete_payment.",
+      inputSchema: {
+        resource: z.string().describe("Resource URL from the payment_required envelope"),
+        payer: z.string().describe("Your XRPL classic address, which pays and signs"),
+        body: z.record(z.string(), z.unknown()).optional().describe("The exact input echoed in the envelope, if any"),
+      },
+    },
+    async ({ resource, payer, body }) => {
+      const prepared = await engine.preparePayment(resource, payer, body ?? {});
+      return { content: [{ type: "text", text: JSON.stringify(prepared) }] };
+    },
+  );
+
+  server.registerTool(
+    "complete_payment",
+    {
+      description:
+        "Free. Claims a paid resource with a payment you signed but did not submit. Give it the paymentId from prepare_payment and the signed transaction blob; it builds the PAYMENT-SIGNATURE header, settles through the facilitator and returns the resource content. A paymentId can be claimed once and expires ten minutes after it is prepared.",
+      inputSchema: {
+        paymentId: z.string().describe("The paymentId returned by prepare_payment"),
+        signedTxBlob: z.string().describe("Signed transaction blob (tx_blob) — signed, not submitted"),
+        body: z.record(z.string(), z.unknown()).optional().describe("The same input passed to prepare_payment"),
+      },
+    },
+    async ({ paymentId, signedTxBlob, body }) => {
+      const result = await engine.completePayment(paymentId, signedTxBlob, body ?? {});
+      return { content: [{ type: "text", text: JSON.stringify(result) }] };
     },
   );
 

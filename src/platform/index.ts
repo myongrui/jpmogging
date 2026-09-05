@@ -10,6 +10,7 @@ import { buildMarketplacePlan } from "./marketplacePlan.js";
 import { orchestrate } from "./orchestrate.js";
 import { loadRegistry } from "./registry.js";
 import { RevenueLedger, splitFee } from "./revenue.js";
+import { X402Bridge } from "./x402Bridge.js";
 
 const port = Number(process.env.PLATFORM_PORT ?? "8081");
 const payTo = process.env.XRPL_PLATFORM_PAY_TO ?? process.env.XRPL_PAY_TO;
@@ -59,8 +60,18 @@ void market.warm().then(() => {
 });
 setInterval(() => void market.warm(), marketTtlMs).unref();
 
+// Agents whose wallet signs but does not speak x402 use this to pay. The
+// payment network comes from the challenge, not from whichever ledger the
+// engine reads, so this must not reuse the engine's socket.
+const bridge = new X402Bridge({
+  wsUrlForNetwork: (network) =>
+    network === "xrpl:1" ? (process.env.XRPL_TESTNET_WS ?? undefined) : network === "xrpl:0" ? (process.env.XRPL_MAINNET_WS ?? undefined) : undefined,
+});
+
 const engine = {
   ready: () => market.snapshot !== undefined,
+  preparePayment: (resource: string, payer: string, body?: unknown) => bridge.prepare(resource, payer, body),
+  completePayment: (paymentId: string, signedTxBlob: string, body?: unknown) => bridge.complete(paymentId, signedTxBlob, body),
   quotes: () => profiles.map((p) => books.get(p.id)!.quote()),
   recordListingFee: () => {
     // A listing is the platform's own product, so none of it is owed onward.
@@ -117,6 +128,7 @@ buildPlatformApp(cfg, engine).listen(port, "127.0.0.1", () => {
   console.log(`engine reading ${engineNetwork} via ${ws}`);
   console.log(`paid: ${cfg.baseUrl}/api/strategies at ${cfg.listPriceDrops} drops · ${cfg.baseUrl}/api/allocate at ${cfg.priceDrops} drops -> ${cfg.payTo}`);
   console.log(`platform cut ${cfg.cutBps / 100}% · revenue ledger ${revenue.path}`);
+  console.log(`x402 bridge: prepare_payment / complete_payment for wallets that sign but do not speak x402`);
   for (const p of profiles) {
     console.log(`  ${p.id.padEnd(6)} ${(p.headlineApy * 100).toFixed(1)}% up to ${String(p.capacity).padStart(7)} · risk ${p.riskScore} · pool risk <= ${p.maxPoolRisk} · exit ${p.exitHours}h`);
   }
