@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-accent="blue">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wire — agent marketplace on XRPL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ---------- tokens ---------- */
+:root{
+  --font: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --radius: 8px;
+  --radius-sm: 6px;
+  --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.04);
+  --ok: #2F9E6E; --warn: #C98B1D; --bad: #D64550;
+}
+[data-theme="light"]{
+  --bg:#F6F8FB; --surface:#FFFFFF; --surface-2:#F1F4F8;
+  --ink:#1A1F36; --ink-2:#4F566B; --ink-3:#8792A2;
+  --line:#E3E8EE; --line-2:#D5DCE5;
+}
+[data-theme="dark"]{
+  --bg:#0F141B; --surface:#161C25; --surface-2:#1C232E;
+  --ink:#E6EAF0; --ink-2:#A3ADBB; --ink-3:#6B7684;
+  --line:#242D39; --line-2:#2E3846;
+  --shadow: 0 1px 2px rgba(0,0,0,.35);
+}
+[data-accent="blue"]  { --accent:#5469D4; }
+[data-accent="pink"]  { --accent:#C86B9B; }
+[data-accent="green"] { --accent:#3D9A7A; }
+[data-accent="yellow"]{ --accent:#B8952A; }
+[data-theme="dark"][data-accent="blue"]  { --accent:#7B8DE8; }
+[data-theme="dark"][data-accent="pink"]  { --accent:#DD8AB6; }
+[data-theme="dark"][data-accent="green"] { --accent:#5FB894; }
+[data-theme="dark"][data-accent="yellow"]{ --accent:#D3B04B; }
+:root{ --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+       --accent-line: color-mix(in srgb, var(--accent) 35%, transparent); }
+
+/* ---------- base ---------- */
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+button,select{font:inherit;color:inherit}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+
+/* ---------- top bar ---------- */
+.top{display:flex;align-items:center;gap:16px;padding:14px 24px;border-bottom:1px solid var(--line);background:var(--surface)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px}
+.brand i{width:10px;height:10px;border-radius:3px;background:var(--accent);display:inline-block}
+.net{font-size:12px;color:var(--ink-2);padding:3px 8px;border:1px solid var(--line-2);border-radius:999px;display:inline-flex;align-items:center;gap:6px}
+.net b{width:6px;height:6px;border-radius:50%;background:var(--ok);display:inline-block}
+.spacer{flex:1}
+.ctl{display:flex;align-items:center;gap:8px}
+.ctl label{font-size:12px;color:var(--ink-2)}
+select{background:var(--surface);border:1px solid var(--line-2);border-radius:var(--radius-sm);padding:6px 28px 6px 10px;appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--ink-3) 50%),linear-gradient(135deg,var(--ink-3) 50%,transparent 50%);background-position:calc(100% - 14px) 55%,calc(100% - 9px) 55%;background-size:5px 5px;background-repeat:no-repeat}
+.btn{border:1px solid var(--line-2);background:var(--surface);border-radius:var(--radius-sm);padding:6px 12px;cursor:pointer;font-weight:500}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:disabled{opacity:.55;cursor:default}
+.btn.ghost{border-color:transparent;color:var(--ink-2)}
+.swatches{display:flex;gap:6px;align-items:center}
+.sw{width:18px;height:18px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
+.sw[data-a="blue"]{background:#5469D4}.sw[data-a="pink"]{background:#C86B9B}.sw[data-a="green"]{background:#3D9A7A}.sw[data-a="yellow"]{background:#B8952A}
+.sw.on{border-color:var(--ink);box-shadow:0 0 0 2px var(--surface) inset}
+.divider{width:1px;height:20px;background:var(--line)}
+
+/* ---------- stats ---------- */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:18px 24px 0}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow)}
+.stat .k{font-size:12px;color:var(--ink-2)}
+.stat .v{font-size:22px;font-weight:600;letter-spacing:-.01em;margin-top:4px;display:flex;align-items:baseline;gap:6px}
+.stat .v small{font-size:12px;font-weight:400;color:var(--ink-3)}
+.meter{height:4px;background:var(--surface-2);border-radius:2px;margin-top:10px;overflow:hidden}
+.meter i{display:block;height:100%;width:0;background:var(--accent);transition:width .4s ease}
+
+/* ---------- columns ---------- */
+.grid{display:grid;grid-template-columns:minmax(250px,.85fr) minmax(360px,1.35fr) minmax(250px,.85fr) minmax(250px,.85fr);gap:12px;padding:12px 24px 24px;min-height:calc(100vh - 170px)}
+.col{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);display:flex;flex-direction:column;min-height:520px;overflow:hidden}
+.col h2{font-size:13px;font-weight:600;margin:0;padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+.col h2 span{font-weight:400;color:var(--ink-3);font-size:12px}
+.body{padding:12px 16px;overflow:auto;flex:1}
+.empty{color:var(--ink-3);font-size:13px;padding:20px 0;text-align:center}
+
+/* mandate */
+.mandate{border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface-2);padding:12px;margin-bottom:12px}
+.mandate .title{font-weight:600;margin-bottom:8px;display:flex;justify-content:space-between}
+.mandate .title span{color:var(--ink-3);font-weight:400;font-size:12px}
+.kv{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:13px}
+.kv dt{color:var(--ink-2)}.kv dd{margin:0;font-variant-numeric:tabular-nums;text-align:right}
+
+/* reasoning log */
+.log{list-style:none;margin:0;padding:0}
+.log li{display:grid;grid-template-columns:44px 1fr;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}
+.log li:last-child{border-bottom:0}
+.log time{color:var(--ink-3);font-variant-numeric:tabular-nums;font-size:12px;padding-top:1px}
+.log .d{color:var(--ink-2);font-size:12px;margin-top:2px}
+.log li.refuse .t{color:var(--bad)}
+.log li.done .t{color:var(--ok)}
+
+/* wire */
+.wire{list-style:none;margin:0;padding:0;position:relative}
+.wire::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--line-2)}
+.wire li{display:flex;padding:6px 0;position:relative}
+.wire li.req{justify-content:flex-start}
+.wire li.res{justify-content:flex-end}
+.wire li.sys{justify-content:center}
+.msg{max-width:72%;border:1px solid var(--line);border-radius:var(--radius-sm);padding:9px 12px;background:var(--surface);font-size:13px}
+.req .msg{border-left:3px solid var(--accent)}
+.res .msg{border-right:3px solid var(--line-2)}
+.res.pay .msg{border-right-color:var(--warn)}
+.res.ok .msg{border-right-color:var(--ok)}
+.res.bad .msg{border-right-color:var(--bad)}
+.sys .msg{border-style:dashed;color:var(--ink-2);background:transparent;font-size:12px}
+.msg .who{font-size:11px;color:var(--ink-3);margin-bottom:3px}
+.msg .h{font-weight:600}
+.msg .code{font-family:var(--mono);font-size:12px;color:var(--ink-2);margin-top:6px;white-space:pre-wrap;word-break:break-word}
+.badge{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid var(--line-2);color:var(--ink-2);margin-left:6px;vertical-align:1px}
+.badge.b402{border-color:color-mix(in srgb,var(--warn) 45%,transparent);color:var(--warn)}
+.badge.b200{border-color:color-mix(in srgb,var(--ok) 45%,transparent);color:var(--ok)}
+.badge.b422{border-color:color-mix(in srgb,var(--bad) 45%,transparent);color:var(--bad)}
+
+/* ledger */
+.tx{border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px;display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center}
+.tx .type{font-weight:600;font-size:13px}
+.tx .amt{font-variant-numeric:tabular-nums;color:var(--ink-2);font-size:13px;text-align:right}
+.tx .hash{font-family:var(--mono);font-size:12px;color:var(--ink-3);grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.tx .hash a{color:var(--ink-3)}
+.st{font-family:var(--font);font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid var(--line-2)}
+.st.pending{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
+.st.validated{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,transparent)}
+.tx.setup{opacity:.7}
+
+
+/* match */
+.match{border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface-2);padding:12px;margin-bottom:12px}
+.match .title{font-weight:600;display:flex;justify-content:space-between;margin-bottom:8px}
+.match .title span{font-weight:400;color:var(--ink-3);font-size:12px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.chip{font-size:12px;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent-line)}
+.cand{width:100%;border-collapse:collapse;font-size:12.5px}
+.cand th{font-weight:500;color:var(--ink-3);text-align:left;padding:4px 6px;border-bottom:1px solid var(--line)}
+.cand td{padding:6px 6px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;vertical-align:top}
+.cand tr:last-child td{border-bottom:0}
+.cand td.num{text-align:right}
+.cand tr.out td{color:var(--ink-3)}
+.cand tr.win td{font-weight:500}
+.cand .why{color:var(--ink-3);font-size:11.5px;display:block}
+.who3{font-size:11px;color:var(--ink-3);margin-bottom:3px}
+.req.plat .msg{border-left-color:var(--ink-3)}
+.res.plat .msg{border-right-color:var(--accent)}
+/* sellers */
+.seller{border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px}
+.seller .n{font-weight:600;font-size:13px;display:flex;justify-content:space-between;align-items:center}
+.seller .n .st{font-family:var(--font)}
+.seller .m{display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:12px;color:var(--ink-2);margin-top:6px}
+.seller .m b{color:var(--ink);font-weight:500;font-variant-numeric:tabular-nums;text-align:right}
+.rate{display:inline-flex;align-items:center;gap:5px}
+.rate i{width:8px;height:8px;border-radius:2px;display:inline-block;background:var(--ok)}
+.rate.b i{background:var(--warn)}.rate.c i{background:var(--bad)}
+.seller.matched{border-color:var(--accent-line);background:var(--accent-soft)}
+.seller.dim{opacity:.6}
+.st.matched{color:var(--accent);border-color:var(--accent-line)}
+.st.filtered{color:var(--ink-3)}
+
+/* integration note */
+.foot{padding:0 24px 28px;color:var(--ink-2);font-size:12px}
+details{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);padding:10px 14px}
+summary{cursor:pointer;font-weight:500;color:var(--ink)}
+pre{font-family:var(--mono);font-size:12px;background:var(--surface-2);padding:10px 12px;border-radius:var(--radius-sm);overflow:auto;color:var(--ink-2)}
+
+@media (max-width: 1280px){ .grid{grid-template-columns:1fr 1fr} }
+@media (max-width: 980px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .grid{grid-template-columns:1fr;min-height:auto}
+  .col{min-height:320px}
+  .top{flex-wrap:wrap}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand"><i></i>Wire <span style="font-weight:400;color:var(--ink-3);font-size:13px;margin-left:4px">agent marketplace</span></div>
+  <span class="net"><b></b>XRPL Testnet</span>
+  <div class="spacer"></div>
+
+  <div class="ctl">
+    <label for="mandate">Mandate</label>
+    <select id="mandate">
+      <option value="balanced">Balanced — 100k RLUSD, risk ≤ 30</option>
+      <option value="conservative">Conservative — 100k RLUSD, risk ≤ 20</option>
+      <option value="tight">Tight budget — per-call cap 0.2 XRP</option>
+    </select>
+  </div>
+  <button class="btn primary" id="run">Run</button>
+  <button class="btn ghost" id="reset">Clear</button>
+
+  <div class="divider"></div>
+  <div class="swatches" role="group" aria-label="Accent colour">
+    <button class="sw on" data-a="blue" aria-label="Blue"></button>
+    <button class="sw" data-a="pink" aria-label="Pink"></button>
+    <button class="sw" data-a="green" aria-label="Green"></button>
+    <button class="sw" data-a="yellow" aria-label="Yellow"></button>
+  </div>
+  <button class="btn" id="theme" aria-label="Toggle theme">Dark</button>
+</header>
+
+<section class="stats">
+  <div class="stat"><div class="k">Listed seller agents</div><div class="v"><span id="s-sellers">3</span><small>rated by platform</small></div></div>
+  <div class="stat"><div class="k">Buyer spend today</div><div class="v"><span id="s-spend">0.0</span><small>/ <span id="s-cap">5.0</span> XRP</small></div><div class="meter"><i id="s-meter"></i></div></div>
+  <div class="stat"><div class="k">Paid calls</div><div class="v"><span id="s-calls">0</span><small>match + strategy</small></div></div>
+  <div class="stat"><div class="k">Settled on ledger</div><div class="v"><span id="s-tx">0</span><small>transactions</small></div></div>
+</section>
+
+<main class="grid">
+  <section class="col" aria-label="Buyer agent">
+    <h2>Buyer agent <span id="buyer-state">idle</span></h2>
+    <div class="body">
+      <div class="mandate" id="mandate-card"></div>
+      <ul class="log" id="log"><li class="empty">Run to start the agent.</li></ul>
+    </div>
+  </section>
+
+  <section class="col" aria-label="Platform match and protocol exchange">
+    <h2>Platform <span>classify · match · route</span></h2>
+    <div class="body">
+      <div class="match" id="match"><div class="empty">The mandate is classified and matched here.</div></div>
+      <ul class="wire" id="wire"><li class="empty">Requests, 402 challenges, payments and responses appear here.</li></ul>
+    </div>
+  </section>
+
+  <section class="col" aria-label="Seller registry">
+    <h2>Seller agents <span>listed · rated</span></h2>
+    <div class="body" id="sellers"></div>
+  </section>
+
+  <section class="col" aria-label="Ledger">
+    <h2>Ledger <span>XRPL transactions</span></h2>
+    <div class="body" id="ledger"></div>
+  </section>
+</main>
+
+<footer class="foot">
+  <details>
+    <summary>Plugging the real agents in</summary>
+    <p>This page renders whatever is pushed to <code>window.MachineWire</code>. The demo button replays a scripted run through the same API, so replacing it with live events is one line: subscribe to your agent's event stream and forward each event.</p>
+<pre>// from the buyer agent or the seller endpoint (any transport — WebSocket, SSE, polling)
+new WebSocket("ws://localhost:8787/events").onmessage = e => MachineWire.push(JSON.parse(e.data));
+
+// event shape
+{
+  lane:  "buyer" | "match" | "wire" | "sellers" | "ledger",
+  kind:  "reason" | "request" | "response" | "payment" | "tx" | "refusal" | "done",
+  title: "Paying 0.5 XRP",           // one line
+  detail:"Within per-call cap 1 XRP", // optional second line
+  code:  402 | 200 | 422,             // wire responses only
+  body:  { ... },                     // wire: rendered as JSON
+  tx: { type:"VaultDeposit", amount:"60 XRP", hash:"...", status:"pending"|"validated", setup:false },
+  // match lane: { category:"lend_borrow", band:"moderate", candidates:[{id, name, rating, netYield, capacity, score, out?:"reason"}] }
+  // sellers lane: { id, status:"listed"|"matched"|"filtered", reason? }
+  // wire lane: add  from:"buyer"|"platform"|"seller", to:"buyer"|"platform"|"seller"
+}
+MachineWire.updateTx(hash, "validated");  // flip a pending tx when it validates
+MachineWire.reset();</pre>
+  </details>
+</footer>
+
+<script>
+/* ---------------- theme + accent ---------------- */
+const root = document.documentElement;
+document.getElementById('theme').addEventListener('click', e => {
+  const dark = root.dataset.theme === 'dark';
+  root.dataset.theme = dark ? 'light' : 'dark';
+  e.currentTarget.textContent = dark ? 'Dark' : 'Light';
+});
+document.querAll = s => [...document.querySelectorAll(s)];
+document.querAll('.sw').forEach(b => b.addEventListener('click', () => {
+  root.dataset.accent = b.dataset.a;
+  document.querAll('.sw').forEach(x => x.classList.toggle('on', x === b));
+}));
+
+/* ---------------- state + renderers ---------------- */
+const S = { spend: 0, cap: 5, calls: 0, txs: 0 };
+const $ = id => document.getElementById(id);
+const fmtTime = () => { const d = new Date(); return d.toTimeString().slice(0,8); };
+const short = h => h.slice(0,6) + '…' + h.slice(-6);
+const explorer = h => `https://testnet.xrpl.org/transactions/${h}`;
+
+function stats(){
+  $('s-spend').textContent = S.spend.toFixed(1);
+  $('s-cap').textContent = S.cap.toFixed(1);
+  $('s-meter').style.width = Math.min(100, S.spend / S.cap * 100) + '%';
+  $('s-calls').textContent = S.calls;
+  $('s-tx').textContent = S.txs;
+}
+function clearEmpty(el){ const e = el.querySelector('.empty'); if (e) e.remove(); }
+
+function renderBuyer(ev){
+  const ul = $('log'); clearEmpty(ul);
+  const li = document.createElement('li');
+  li.className = ev.kind === 'refusal' ? 'refuse' : ev.kind === 'done' ? 'done' : '';
+  li.innerHTML = `<time>${fmtTime()}</time><div><div class="t">${ev.title}</div>${ev.detail ? `<div class="d">${ev.detail}</div>` : ''}</div>`;
+  ul.appendChild(li); li.scrollIntoView({block:'nearest'});
+  $('buyer-state').textContent = ev.kind === 'done' ? 'settled' : ev.kind === 'refusal' ? 'holding' : 'working';
+}
+
+function renderWire(ev){
+  const ul = $('wire'); clearEmpty(ul);
+  const li = document.createElement('li');
+  const isReq = ev.kind === 'request' || ev.kind === 'payment';
+  let cls = ev.kind === 'request' ? 'req' : ev.kind === 'payment' ? 'req' : ev.kind === 'system' ? 'sys'
+            : ev.code === 402 ? 'res pay' : ev.code === 200 ? 'res ok' : 'res bad';
+  if (ev.from === 'platform' || ev.to === 'platform') cls += ' plat';
+  li.className = cls;
+  const who = ev.kind === 'system' ? '' : `<div class="who">${ev.from || (isReq ? 'buyer' : 'seller')} → ${ev.to || (isReq ? 'seller' : 'buyer')}</div>`;
+  const badge = ev.code ? `<span class="badge b${ev.code}">${ev.code}</span>` : '';
+  const code = ev.body ? `<div class="code">${JSON.stringify(ev.body, null, 2)}</div>` : '';
+  li.innerHTML = `<div class="msg">${who}<span class="h">${ev.title}</span>${badge}${ev.detail ? `<div class="d" style="color:var(--ink-2);margin-top:3px">${ev.detail}</div>` : ''}${code}</div>`;
+  ul.appendChild(li); li.scrollIntoView({block:'nearest'});
+}
+
+function renderTx(ev){
+  const t = ev.tx; const box = $('ledger');
+  const div = document.createElement('div');
+  div.className = 'tx' + (t.setup ? ' setup' : ''); div.dataset.hash = t.hash;
+  div.innerHTML = `<div class="type">${t.type}</div><div class="amt">${t.amount || ''}</div>
+    <div class="hash"><a href="${explorer(t.hash)}" target="_blank" rel="noopener" title="${t.hash}">${short(t.hash)}</a><span class="st ${t.status}">${t.status}</span></div>`;
+  box.appendChild(div); div.scrollIntoView({block:'nearest'});
+  if (t.status === 'validated') { S.txs++; stats(); }
+}
+
+const SELLERS = [
+  { id:'ledgerline', name:'Ledgerline Lend v1', strategy:'lend_borrow', rating:'A', risk:24, netYield:0.064, exit:'≤ 1 h', maxLev:'1.6x', cap:'5k–250k XRP', price:'0.5 XRP/call' },
+  { id:'ampere',     name:'Ampere LP Router',   strategy:'amm_lp',      rating:'B', risk:41, netYield:0.093, exit:'≤ 6 h', maxLev:'1.0x', cap:'10k–80k XRP',  price:'0.4 XRP/call' },
+  { id:'northfork',  name:'Northfork Carry',    strategy:'carry',       rating:'B', risk:33, netYield:0.078, exit:'≤ 24 h', maxLev:'2.5x', cap:'50k+ XRP',    price:'0.8 XRP/call' },
+];
+function renderSellers(){
+  const box = $('sellers'); box.innerHTML = '';
+  SELLERS.forEach(s => {
+    const d = document.createElement('div'); d.className = 'seller'; d.dataset.id = s.id;
+    const rc = s.rating === 'A' ? '' : s.rating === 'B' ? 'b' : 'c';
+    d.innerHTML = `<div class="n"><span>${s.name}</span><span class="st listed" data-st>listed</span></div>
+      <div class="m"><span>Strategy</span><b>${s.strategy}</b><span>Platform rating</span><b><span class="rate ${rc}"><i></i>${s.rating} · risk ${s.risk}</span></b><span>Net yield</span><b>${(s.netYield*100).toFixed(1)}%</b><span>Exit time</span><b>${s.exit}</b><span>Max leverage</span><b>${s.maxLev}</b><span>Capacity</span><b>${s.cap}</b><span>Price</span><b>${s.price}</b></div>`;
+    box.appendChild(d);
+  });
+}
+function renderSellerStatus(ev){
+  const d = document.querySelector(`.seller[data-id="${ev.id}"]`); if (!d) return;
+  const st = d.querySelector('[data-st]'); st.textContent = ev.status; st.className = 'st ' + ev.status;
+  d.classList.toggle('matched', ev.status === 'matched'); d.classList.toggle('dim', ev.status === 'filtered');
+  if (ev.reason) { let w = d.querySelector('.why'); if (!w) { w = document.createElement('div'); w.className = 'why'; w.style.cssText = 'font-size:11.5px;color:var(--ink-3);margin-top:6px'; d.appendChild(w); } w.textContent = ev.reason; }
+}
+function renderMatch(ev){
+  const box = $('match');
+  const rows = ev.candidates.map(c => `<tr class="${c.out ? 'out' : c.win ? 'win' : ''}"><td>${c.name}${c.out ? `<span class="why">${c.out}</span>` : ''}</td><td>${c.rating}</td><td class="num">${(c.netYield*100).toFixed(1)}%</td><td class="num">${c.out ? '—' : c.score.toFixed(2)}</td></tr>`).join('');
+  box.innerHTML = `<div class="title">Mandate classified <span>platform</span></div>
+    <div class="chips"><span class="chip">${ev.category}</span><span class="chip">${ev.band} risk band</span><span class="chip">${ev.candidates.filter(c=>!c.out).length} of ${ev.candidates.length} eligible</span></div>
+    <table class="cand"><thead><tr><th>Seller</th><th>Rating</th><th style="text-align:right">Net yield</th><th style="text-align:right">Score</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+window.MachineWire = {
+  push(ev){
+    if (ev.lane === 'buyer') renderBuyer(ev);
+    else if (ev.lane === 'wire') renderWire(ev);
+    else if (ev.lane === 'ledger') renderTx(ev);
+    else if (ev.lane === 'match') renderMatch(ev);
+    else if (ev.lane === 'sellers') renderSellerStatus(ev);
+    if (ev.spend) { S.spend += ev.spend; S.calls++; stats(); }
+  },
+  updateTx(hash, status){
+    const el = document.querySelector(`.tx[data-hash="${hash}"] .st`);
+    if (!el) return; const was = el.textContent; el.textContent = status; el.className = 'st ' + status;
+    if (status === 'validated' && was !== 'validated') { S.txs++; stats(); }
+  },
+  reset(){
+    S.spend = 0; S.calls = 0; S.txs = 0; stats();
+    $('log').innerHTML = '<li class="empty">Run to start the agent.</li>';
+    $('wire').innerHTML = '<li class="empty">Requests, 402 challenges, payments and responses appear here.</li>';
+    $('ledger').innerHTML = ''; $('buyer-state').textContent = 'idle';
+    $('match').innerHTML = '<div class="empty">The mandate is classified and matched here.</div>';
+    renderSellers(); seedSetup();
+  }
+};
+
+/* ---------------- mandates ---------------- */
+const MANDATES = {
+  balanced:     { name:'Balanced',     asset:'RLUSD', amount:'100,000', horizon:'72 h', liq:'≥ 50%', risk:'≤ 30', conc:'≤ 25% per venue', perCall:'1.0 XRP', daily:'5.0 XRP', cap:5, perCallN:1.0 },
+  conservative: { name:'Conservative', asset:'RLUSD', amount:'100,000', horizon:'72 h', liq:'≥ 70%', risk:'≤ 20', conc:'≤ 25% per venue', perCall:'1.0 XRP', daily:'5.0 XRP', cap:5, perCallN:1.0 },
+  tight:        { name:'Tight budget', asset:'RLUSD', amount:'100,000', horizon:'72 h', liq:'≥ 50%', risk:'≤ 30', conc:'≤ 25% per venue', perCall:'0.2 XRP', daily:'1.0 XRP', cap:1, perCallN:0.2 },
+};
+function renderMandate(key){
+  const m = MANDATES[key]; S.cap = m.cap; stats();
+  $('mandate-card').innerHTML = `<div class="title">${m.name} mandate <span>set by operator</span></div>
+  <dl class="kv"><dt>Idle funds</dt><dd>${m.amount} ${m.asset}</dd><dt>Horizon</dt><dd>${m.horizon}</dd><dt>Liquidity floor</dt><dd>${m.liq}</dd><dt>Risk ceiling</dt><dd>${m.risk}</dd><dt>Concentration</dt><dd>${m.conc}</dd><dt>Per-call cap</dt><dd>${m.perCall}</dd><dt>Daily cap</dt><dd>${m.daily}</dd></dl>`;
+}
+$('mandate').addEventListener('change', e => { MachineWire.reset(); renderMandate(e.target.value); });
+
+/* ---------------- demo run (scripted through the same API) ---------------- */
+const H = () => Array.from({length:64}, () => '0123456789ABCDEF'[Math.random()*16|0]).join('');
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const NONCE = 'a91f-2c7e';
+const REC = { recommendation:'vault_lend_borrow', allocation:[{venue:'vault:XRP-testnet-01',deposit:'60%'},{venue:'vault:XRP-testnet-01',borrow:'20%'},{venue:'liquid',weight:'50%'}], expected_apy:0.071, risk_score:28, liquidity_score:91, valid_until:'23:00Z' };
+
+function seedSetup(){
+  MachineWire.push({lane:'ledger', tx:{type:'VaultCreate', amount:'XRP vault', hash:H(), status:'validated', setup:true}});
+  MachineWire.push({lane:'ledger', tx:{type:'LoanBrokerSet', amount:'', hash:H(), status:'validated', setup:true}});
+  S.txs = 0; stats();
+}
+
+async function run(key){
+  const m = MANDATES[key]; const btn = $('run'); btn.disabled = true;
+  const P = o => MachineWire.push(o);
+  const riskCeil = key === 'conservative' ? 20 : 30;
+
+  P({lane:'buyer', kind:'reason', title:'Read mandate', detail:`${m.amount} ${m.asset} idle for ${m.horizon}, risk ${m.risk}, liquidity ${m.liq}`}); await wait(600);
+  P({lane:'buyer', kind:'reason', title:'Requesting a match from the platform', detail:'find_strategy(mandate) via MCP'}); await wait(500);
+  P({lane:'wire', kind:'request', from:'buyer', to:'platform', title:'find_strategy(mandate)', body:{asset:m.asset, amount:100000, maximum_risk_score:riskCeil, minimum_liquidity: key==='conservative'?0.7:0.5, maxLTV:0.6}}); await wait(700);
+  P({lane:'wire', kind:'response', from:'platform', to:'buyer', code:402, title:'Match fee', detail:'0.1 XRP to rPLATFORM…3vX', body:{price:'0.1 XRP', pay_to:'rPLATFORMb2…3vX', nonce:'m-7f21'}}); await wait(600);
+
+  if (key === 'tight'){
+    P({lane:'buyer', kind:'refusal', title:'Declined to pay', detail:`Match fee 0.1 XRP is within cap, but the cheapest listed strategy call is 0.4 XRP > per-call cap ${m.perCall}. Holding funds; operator notified.`});
+    P({lane:'wire', kind:'system', title:'Buyer closed the request without paying'});
+    btn.disabled = false; return;
+  }
+
+  const mfee = H();
+  P({lane:'wire', kind:'payment', from:'buyer', to:'platform', title:'Payment 0.1 XRP', detail:`memo m-7f21 · tx ${short(mfee)}`});
+  P({lane:'ledger', tx:{type:'Payment', amount:'0.1 XRP', hash:mfee, status:'pending'}}); await wait(900);
+  MachineWire.updateTx(mfee, 'validated'); S.spend += 0.1; S.calls++; stats();
+
+  // platform classifies + filters + ranks
+  const cands = SELLERS.map(s => {
+    let out = null;
+    if (s.strategy !== 'lend_borrow' && key === 'conservative') out = 'strategy outside conservative band';
+    if (s.risk > riskCeil) out = `risk ${s.risk} > ceiling ${riskCeil}`;
+    if (s.id === 'northfork') out = out || 'capacity 50k+ XRP exceeds mandate';
+    if (s.id === 'ampere' && !out) out = 'exit ≤ 6 h below liquidity floor';
+    const score = out ? 0 : s.netYield * (1 - s.risk/100) ;
+    return { id:s.id, name:s.name, rating:s.rating, netYield:s.netYield, score, out };
+  });
+  const eligible = cands.filter(c => !c.out).sort((a,b) => b.score - a.score);
+  if (eligible.length) eligible[0].win = true;
+  P({lane:'match', category:'lend_borrow', band: key==='conservative' ? 'conservative' : 'moderate', candidates:cands});
+  cands.forEach(c => P({lane:'sellers', id:c.id, status: c.win ? 'matched' : c.out ? 'filtered' : 'listed', reason:c.out || (c.win ? 'best confidence-adjusted net yield' : '')}));
+  await wait(700);
+
+  if (!eligible.length){
+    P({lane:'wire', kind:'response', from:'platform', to:'buyer', code:422, title:'No eligible seller', body:{reason:`no listed strategy inside risk ceiling ${riskCeil}`, evaluated:SELLERS.length}}); await wait(500);
+    P({lane:'buyer', kind:'refusal', title:'Holding funds', detail:'Platform found no seller inside the mandate. No on-ledger action taken.'});
+    btn.disabled = false; return;
+  }
+
+  const win = SELLERS.find(s => s.id === eligible[0].id);
+  P({lane:'wire', kind:'response', from:'platform', to:'buyer', code:200, title:'Match', body:{seller:win.name, endpoint:'mcp://ledgerline.agents/evaluate', rating:win.rating, price:win.price, reason:'best confidence-adjusted net yield inside mandate'}}); await wait(700);
+  P({lane:'buyer', kind:'reason', title:'Match accepted', detail:`${win.name} · rating ${win.rating} · ${win.price}`}); await wait(500);
+
+  // buyer → seller
+  P({lane:'wire', kind:'request', from:'buyer', to:'seller', title:'evaluate_and_allocate(mandate)', detail:win.name}); await wait(600);
+  P({lane:'wire', kind:'response', from:'seller', to:'buyer', code:402, title:'Payment required', detail:'0.5 XRP to rSELLER…9kQ', body:{price:'0.5 XRP', pay_to:'rSELLERq7…9kQ', nonce:NONCE}}); await wait(600);
+  P({lane:'buyer', kind:'reason', title:'Price within limits', detail:`0.5 XRP ≤ per-call ${m.perCall}; daily used ${S.spend.toFixed(1)} of ${m.daily}`}); await wait(400);
+  const payHash = H();
+  P({lane:'wire', kind:'payment', from:'buyer', to:'seller', title:'Payment 0.5 XRP', detail:`memo ${NONCE} · tx ${short(payHash)}`});
+  P({lane:'ledger', tx:{type:'Payment', amount:'0.5 XRP', hash:payHash, status:'pending'}}); await wait(1000);
+  MachineWire.updateTx(payHash, 'validated'); S.spend += 0.5; S.calls++; stats();
+  P({lane:'wire', kind:'system', title:'Seller verified payment on ledger: receiver, amount, nonce, unused'}); await wait(500);
+  P({lane:'wire', kind:'response', from:'seller', to:'buyer', code:200, title:'Strategy container', body:{state:{lendAsset:'XRP',lendAPR:0.081,borrowAsset:'XRP',borrowAPR:0.042,effectiveLeverage:1.6,netYield:0.064}, signals:{status:'healthy', reason:'net yield 6.4% above 5% floor'}}}); await wait(700);
+  P({lane:'buyer', kind:'reason', title:'Constraints satisfied', detail:'net yield 6.4% ≥ 5% · LTV 60% ≤ 60% · drawdown 0% ≤ 20%'}); await wait(500);
+  P({lane:'buyer', kind:'reason', title:'Executing deposit', detail:'VaultDeposit 60 XRP into vault:XRP-testnet-01'});
+  const dep = H(); P({lane:'ledger', tx:{type:'VaultDeposit', amount:'60 XRP', hash:dep, status:'pending'}}); await wait(1200);
+  MachineWire.updateTx(dep, 'validated');
+  P({lane:'buyer', kind:'reason', title:'Requesting loan', detail:'LoanSet 36 XRP · 60% LTV · 72 h · co-signed by broker'});
+  const loan = H(); P({lane:'ledger', tx:{type:'LoanSet', amount:'36 XRP', hash:loan, status:'pending'}}); await wait(1300);
+  MachineWire.updateTx(loan, 'validated');
+  P({lane:'buyer', kind:'done', title:'Settled', detail:'4 transactions validated · spent 0.6 XRP on match + judgment'});
+  btn.disabled = false;
+}
+
+$('run').addEventListener('click', () => run($('mandate').value));
+$('reset').addEventListener('click', () => MachineWire.reset());
+
+renderMandate('balanced'); renderSellers(); seedSetup();
+</script>
+<script src="wire-live.js"></script>
+</body>
+</html>

@@ -1,12 +1,14 @@
 import "dotenv/config";
 import { readFileSync } from "node:fs";
 import OpenAI from "openai";
-import { Wallet } from "xrpl";
+import { Client, Wallet } from "xrpl";
+import { executePlan } from "../execute/executor.js";
 import { AuditLog, readRun } from "../shared/audit.js";
 import type { Mandate } from "../shared/types.js";
 import { runAgentLoop } from "./agent.js";
 import { connectMcp } from "./mcpClient.js";
 import { payForResource } from "./pay.js";
+import { validatePlan } from "./planValidator.js";
 import { SpendTracker, policyFromEnv } from "./spendPolicy.js";
 
 const mandatePath = process.argv[2];
@@ -24,9 +26,13 @@ const tracker = new SpendTracker(policy);
 const audit = new AuditLog("runs");
 const openai = new OpenAI();
 
+// Execution moves real capital, so it stays opt-in rather than defaulting on.
+const shouldExecute = process.env.BUYER_EXECUTE === "true";
+
 console.log(`run ${audit.runId}`);
 console.log(`buyer wallet ${wallet.classicAddress} on ${network}`);
 console.log(`spend policy ${policy.maxDropsPerRequest} drops/request, ${policy.maxDropsPerSession} drops/session`);
+console.log(`execution ${shouldExecute ? "ENABLED" : "disabled (set BUYER_EXECUTE=true to allocate)"}`);
 
 const mcp = await connectMcp(`${sellerBaseUrl}/mcp`);
 let decision: Awaited<ReturnType<typeof runAgentLoop>>;
@@ -54,6 +60,33 @@ console.log("");
 console.log(`decision: ${decision.action}`);
 console.log(`rationale: ${decision.rationale}`);
 console.log(`spent ${tracker.spentDrops} drops`);
+
+if (decision.plan) {
+  // The seller is a paid counterparty, not a trusted component: re-check every
+  // mandate constraint here before anything is signed.
+  const verdict = validatePlan(decision.plan, mandate, { network });
+  if (!verdict.ok) {
+    audit.append({ type: "plan_rejected", planId: decision.plan.planId, violations: verdict.violations });
+    console.log(`plan ${decision.plan.planId} REJECTED:`);
+    for (const v of verdict.violations) console.log(`  - ${v}`);
+  } else if (!shouldExecute) {
+    console.log(`plan ${decision.plan.planId} validated (${decision.plan.legs.length} legs) — not executed, BUYER_EXECUTE is not true`);
+  } else {
+    const ws = process.env.XRPL_TESTNET_WS ?? "wss://s.altnet.rippletest.net:51233";
+    const client = new Client(ws);
+    await client.connect();
+    try {
+      const report = await executePlan({ client, wallet, audit, log: (l) => console.log(l) }, decision.plan);
+      console.log(`execution ${report.status}: ${report.validatedHashes.length} of ${decision.plan.legs.length} legs validated`);
+      for (const leg of report.legs) {
+        console.log(`  leg ${leg.seq} ${leg.kind} ${leg.status}${leg.explorer ? ` ${leg.explorer}` : ""}${leg.message ? ` (${leg.message})` : ""}`);
+      }
+    } finally {
+      await client.disconnect();
+    }
+  }
+}
+
 for (const r of readRun("runs", audit.runId)) {
   if (r.event.type === "payment_settled") console.log(`payment ${r.event.transaction} ${r.event.explorer}`);
 }

@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
 import type { AuditLog } from "../shared/audit.js";
+import type { ExecutionPlan } from "../shared/plan.js";
 import type { AllocationResult, Mandate } from "../shared/types.js";
 import { mcpToolsToOpenAiTools, type McpBridge } from "./mcpClient.js";
 import type { PayOutcome } from "./pay.js";
@@ -61,7 +62,14 @@ export function SYSTEM_INSTRUCTIONS(mandate: Mandate, spendSummary: string): str
   ].join(" ");
 }
 
-export async function runAgentLoop(deps: AgentDeps, mandate: Mandate): Promise<{ action: string; rationale: string }> {
+export interface AgentOutcome {
+  action: string;
+  rationale: string;
+  /** Unsigned plan from the purchased analysis, if one was delivered. */
+  plan?: ExecutionPlan;
+}
+
+export async function runAgentLoop(deps: AgentDeps, mandate: Mandate): Promise<AgentOutcome> {
   const log = deps.log ?? (() => {});
   const maxTurns = deps.maxTurns ?? 8;
   deps.audit.append({ type: "mandate", mandate });
@@ -71,6 +79,7 @@ export async function runAgentLoop(deps: AgentDeps, mandate: Mandate): Promise<{
   log(`discovered MCP tools: ${mcpTools.map((t) => t.name).join(", ")}`);
   const tools = [...mcpToolsToOpenAiTools(mcpTools), ...LOCAL_TOOLS];
   const mcpNames = new Set(mcpTools.map((t) => t.name));
+  let plan: ExecutionPlan | undefined;
 
   const input: OpenAI.Responses.ResponseInput = [
     { role: "user", content: `Here is my mandate: ${JSON.stringify(mandate)}. Decide what to do with this capital.` },
@@ -105,14 +114,28 @@ export async function runAgentLoop(deps: AgentDeps, mandate: Mandate): Promise<{
         const decision = { action: String(args.action), rationale: String(args.rationale) };
         deps.audit.append({ type: "decision", ...decision });
         log(`decision: ${decision.action}`);
-        return decision;
+        return { ...decision, plan };
       }
 
       let result: unknown;
       try {
         if (call.name === "pay_for_resource") {
           const outcome = await deps.pay({ resource: String(args.resource), body: args.body });
-          if (outcome.status === "paid") deps.audit.append({ type: "result", result: outcome.body as AllocationResult });
+          if (outcome.status === "paid") {
+            const body = outcome.body as AllocationResult;
+            deps.audit.append({ type: "result", result: body });
+            if (body?.plan) {
+              plan = body.plan;
+              deps.audit.append({
+                type: "plan_received",
+                planId: plan.planId,
+                legs: plan.legs.length,
+                deployed: plan.totals.deployed,
+                reserve: plan.totals.reserve,
+              });
+              log(`plan ${plan.planId}: ${plan.legs.length} leg(s), ${plan.totals.deployed} deployed`);
+            }
+          }
           result = outcome;
         } else if (mcpNames.has(call.name)) {
           result = await deps.mcp.callTool(call.name, args);
@@ -131,5 +154,5 @@ export async function runAgentLoop(deps: AgentDeps, mandate: Mandate): Promise<{
   }
 
   deps.audit.append({ type: "error", message: `no decision after ${maxTurns} turns` });
-  return { action: "no_decision", rationale: "turn limit reached" };
+  return { action: "no_decision", rationale: "turn limit reached", plan };
 }

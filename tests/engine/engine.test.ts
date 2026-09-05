@@ -59,8 +59,29 @@ describe("engine", () => {
     expect(r.opportunities_considered).toBe(2);
   });
 
-  it("fails loudly without the RLUSD reference pool", async () => {
+  it("falls back to the deepest pool when the RLUSD reference is absent", async () => {
     const noRlusd = (async () => new Response(JSON.stringify([rows[1]]))) as typeof fetch;
-    await expect(runAnalysis({ rpc, fetchImpl: noRlusd }, mandate)).rejects.toThrow(/RLUSD/);
+    const r = await runAnalysis({ rpc, fetchImpl: noRlusd }, mandate);
+    expect(r.data.rlusd_per_xrp).toBeCloseTo(1.4, 10);
+    expect(r.opportunities_considered).toBe(1);
+  });
+
+  it("emits an execution plan alongside the analysis", async () => {
+    const now = () => new Date("2026-09-04T12:00:00.000Z");
+    const amendments = { known: true, enabled: new Set(["AMM"]) };
+    const r = await runAnalysis({ rpc, fetchImpl, now, network: "xrpl:0", amendments }, mandate);
+    const plan = r.plan!;
+    expect(plan.network).toBe("xrpl:0");
+    expect(plan.totals.deployed).toBe(25000);
+    expect(plan.totals.reserve).toBe(75000);
+    expect(plan.legs.map((l) => l.tx.TransactionType)).toEqual(["TrustSet", "AMMDeposit"]);
+    expect(plan.legs.every((l) => !("Account" in l.tx))).toBe(true);
+  });
+
+  it("omits legs for venues the network cannot execute", async () => {
+    const amendments = { known: true, enabled: new Set<string>() };
+    const r = await runAnalysis({ rpc, fetchImpl, network: "xrpl:0", amendments }, mandate);
+    expect(r.plan!.legs).toHaveLength(0);
+    expect(r.plan!.totals.deployed).toBe(0);
   });
 });

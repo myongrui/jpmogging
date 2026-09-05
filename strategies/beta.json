@@ -1,0 +1,11 @@
+{
+  "id": "beta",
+  "name": "Beta Wide Router",
+  "family": "amm_lp",
+  "headlineApy": 0.045,
+  "capacity": 200000,
+  "riskScore": 26,
+  "exitHours": 2,
+  "priceDrops": "400000",
+  "requires": ["AMM"]
+}

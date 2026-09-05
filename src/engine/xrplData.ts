@@ -83,3 +83,64 @@ export async function sampleVolume(
   const spanSeconds = Math.max(60, (Math.max(...times) - Math.min(...times)) / 1000);
   return { volumeXrpPerDay: (xrpMoved * 86_400) / spanSeconds, sampleSize: txs.length, spanSeconds };
 }
+
+interface AmmLedgerEntry {
+  Account: string;
+  Asset: { currency: string; issuer?: string };
+  Asset2: { currency: string; issuer?: string };
+  TradingFee?: number;
+}
+
+/**
+ * Enumerates AMMs straight off the ledger. Networks without an indexer (testnet,
+ * devnet) have no xrpscan equivalent, so this pages `ledger_data` filtered to AMM
+ * entries. Paging is bounded because a full ledger scan is expensive.
+ */
+export async function discoverPoolsFromLedger(
+  rpc: XrplRpc,
+  opts: { minXrpSide?: number; limit?: number; maxPages?: number; pageSize?: number } = {},
+): Promise<PoolSnapshot[]> {
+  const minXrpSide = opts.minXrpSide ?? 10;
+  const limit = opts.limit ?? 12;
+  const maxPages = opts.maxPages ?? 25;
+  const pageSize = opts.pageSize ?? 2000;
+
+  const entries: AmmLedgerEntry[] = [];
+  let marker: unknown = undefined;
+  for (let page = 0; page < maxPages; page++) {
+    const req: Record<string, unknown> = { command: "ledger_data", ledger_index: "validated", type: "amm", limit: pageSize, binary: false };
+    if (marker !== undefined) req.marker = marker;
+    const { result } = await rpc.request(req);
+    entries.push(...((result.state ?? []) as AmmLedgerEntry[]));
+    marker = result.marker;
+    if (marker === undefined) break;
+  }
+
+  const xrpPaired = entries.filter((e) => e.Asset.currency === "XRP" && e.Asset2.currency !== "XRP");
+  const snapshots: PoolSnapshot[] = [];
+  // Already sequential: one amm_info per AMM, in order, to stay inside node limits.
+  for (const e of xrpPaired) {
+    try {
+      const { result } = await rpc.request({ command: "amm_info", amm_account: e.Account, ledger_index: "validated" });
+      const amm = result.amm;
+      const drops = String(amm.amount);
+      if (Number(drops) / 1_000_000 < minXrpSide) continue;
+      snapshots.push({
+        ammAccount: e.Account,
+        pairLabel: `XRP/${displayCurrency(e.Asset2.currency)}`,
+        asset2Currency: e.Asset2.currency,
+        asset2Issuer: e.Asset2.issuer ?? "",
+        asset2Name: null,
+        issuerVerified: false,
+        xrpBalanceDrops: drops,
+        asset2Value: String(amm.amount2?.value ?? "0"),
+        tradingFee: amm.trading_fee ?? e.TradingFee ?? 0,
+        frozen: amm.asset2_frozen === true,
+      });
+    } catch {
+      // An AMM entry that amm_info will not resolve is not tradeable; skip it.
+    }
+  }
+
+  return snapshots.sort((a, b) => Number(b.xrpBalanceDrops) - Number(a.xrpBalanceDrops)).slice(0, limit);
+}

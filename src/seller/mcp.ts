@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
+import type { StrategyQuote } from "../platform/strategy.js";
 import type { AllocationResult, Mandate, Opportunity } from "../shared/types.js";
 
 export interface SellerConfig {
@@ -13,6 +14,10 @@ export interface SellerConfig {
 export interface SellerEngine {
   listOpportunities(): Promise<Opportunity[]>;
   runAnalysis(mandate: Mandate): Promise<AllocationResult>;
+  /** Current rate and remaining capacity. Absent for sellers with no profile. */
+  quote?(): StrategyQuote;
+  /** False while the seller cannot serve an analysis, e.g. market data is cold. */
+  ready?(): boolean;
 }
 
 export interface PaymentRequiredEnvelope {
@@ -50,6 +55,18 @@ export function buildMcpServer(cfg: SellerConfig, engine: SellerEngine): McpServ
     },
     async () => ({ content: [{ type: "text", text: JSON.stringify(await engine.listOpportunities()) }] }),
   );
+
+  if (engine.quote) {
+    server.registerTool(
+      "quote",
+      {
+        description:
+          "Free. Reports this strategy's current headline APY, total capacity, capital already committed, and the rate the next unit of capital would earn. Figures move as the strategy fills, so a quote is a snapshot, not a promise.",
+        inputSchema: {},
+      },
+      async () => ({ content: [{ type: "text", text: JSON.stringify(engine.quote!()) }] }),
+    );
+  }
 
   server.registerTool(
     "optimize_allocation",

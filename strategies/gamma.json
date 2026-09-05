@@ -1,0 +1,11 @@
+{
+  "id": "gamma",
+  "name": "Gamma Thin Edge",
+  "family": "amm_lp",
+  "headlineApy": 0.062,
+  "capacity": 40000,
+  "riskScore": 29,
+  "exitHours": 4,
+  "priceDrops": "600000",
+  "requires": ["AMM"]
+}

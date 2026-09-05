@@ -26,7 +26,16 @@ export function buildSellerApp(cfg: SellerConfig, engine: SellerEngine, opts: { 
     });
 
   app.get("/health", (_req, res) => {
-    res.json({ status: "ok" });
+    const ready = engine.ready ? engine.ready() : true;
+    res.status(ready ? 200 : 503).json({ status: ready ? "ok" : "warming" });
+  });
+
+  app.get("/api/quote", (_req, res) => {
+    if (!engine.quote) {
+      res.status(404).json({ error: "this seller advertises no strategy profile" });
+      return;
+    }
+    res.json(engine.quote());
   });
 
   app.get("/api/catalog", (_req, res) => {
@@ -46,7 +55,18 @@ export function buildSellerApp(cfg: SellerConfig, engine: SellerEngine, opts: { 
     next();
   };
 
-  app.post(OPTIMIZE_PATH, validateMandate, guard, async (req, res) => {
+  // x402 settles payment inside the guard, before the handler runs, so a seller
+  // that cannot produce an analysis must refuse *before* the guard rather than
+  // charge for a request it is about to fail.
+  const requireReady: RequestHandler = (_req, res, next) => {
+    if (engine.ready && !engine.ready()) {
+      res.status(503).json({ error: "not ready", message: "market data is still loading; no payment was taken" });
+      return;
+    }
+    next();
+  };
+
+  app.post(OPTIMIZE_PATH, validateMandate, requireReady, guard, async (req, res) => {
     try {
       res.json(await engine.runAnalysis(mandateSchema.parse(req.body)));
     } catch (err) {

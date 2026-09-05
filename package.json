@@ -3,14 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "setup:wallets": "tsx scripts/setup-wallets.ts",
-    "seller": "tsx src/seller/index.ts",
     "buyer": "tsx src/buyer/index.ts mandates/treasury-100k.json",
-    "dashboard": "tsx src/dashboard/index.ts"
+    "dashboard": "tsx src/dashboard/index.ts",
+    "platform": "tsx src/platform/index.ts",
+    "seller:testnet": "XRPL_ENGINE_NETWORK=testnet tsx src/seller/index.ts",
+    "seller:alpha": "STRATEGY_PROFILE=strategies/alpha.json SELLER_PORT=8080 SELLER_BASE_URL=http://127.0.0.1:8080 tsx src/seller/index.ts",
+    "seller:beta": "STRATEGY_PROFILE=strategies/beta.json SELLER_PORT=8082 SELLER_BASE_URL=http://127.0.0.1:8082 tsx src/seller/index.ts",
+    "seller:gamma": "STRATEGY_PROFILE=strategies/gamma.json SELLER_PORT=8083 SELLER_BASE_URL=http://127.0.0.1:8083 tsx src/seller/index.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

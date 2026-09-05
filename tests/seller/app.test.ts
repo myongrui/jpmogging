@@ -118,3 +118,54 @@ describe("seller app", () => {
     await new Promise<void>((resolve) => failingServer.close(() => resolve()));
   });
 });
+
+describe("readiness gate", () => {
+  const mandate = { asset: "RLUSD", amount: 100000, horizon_hours: 72, minimum_liquidity: 0.5, maximum_risk_score: 30, maximum_protocol_allocation: 0.25 };
+
+  async function serve(ready: boolean, onGuard: () => void = () => {}) {
+    const app = buildSellerApp({ ...cfg, baseUrl: "" }, { ...engine, ready: () => ready }, {
+      paymentGuard: (_req, _res, next) => {
+        onGuard();
+        next();
+      },
+    });
+    const s = await new Promise<ReturnType<typeof app.listen>>((resolve) => {
+      const listener = app.listen(0, "127.0.0.1", () => resolve(listener));
+    });
+    const { port } = s.address() as { port: number };
+    return { url: `http://127.0.0.1:${port}`, close: () => s.close() };
+  }
+
+  const post = (url: string) =>
+    fetch(`${url}/api/optimize_allocation`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(mandate),
+    });
+
+  it("refuses a paid analysis before the payment guard runs when not ready", async () => {
+    let guardRan = false;
+    const s = await serve(false, () => {
+      guardRan = true;
+    });
+    const res = await post(s.url);
+    expect(res.status).toBe(503);
+    expect((await res.json()).message).toMatch(/no payment was taken/);
+    expect(guardRan).toBe(false);
+    s.close();
+  });
+
+  it("lets the request through once ready", async () => {
+    const s = await serve(true);
+    expect((await post(s.url)).status).toBe(200);
+    s.close();
+  });
+
+  it("reports warming on health while cold", async () => {
+    const s = await serve(false);
+    const res = await fetch(`${s.url}/health`);
+    expect(res.status).toBe(503);
+    expect((await res.json()).status).toBe("warming");
+    s.close();
+  });
+});

@@ -6,7 +6,7 @@ const VALIDITY_MS = 60 * 60 * 1000;
 export function optimizeAllocation(
   mandate: Mandate,
   pools: PoolMetrics[],
-  ctx: { rlusdPerXrp: number; ledgerIndex: number; sampledAt: string; now: Date },
+  ctx: { rlusdPerXrp: number; ledgerIndex: number; sampledAt: string; now: Date; rateSource?: string },
 ): AllocationResult {
   const eligible = pools
     .filter((p) => p.riskScore <= mandate.maximum_risk_score && p.liquidityScore >= MIN_LIQUIDITY_SCORE && !p.frozen && p.feeApy > 0)
@@ -50,7 +50,7 @@ export function optimizeAllocation(
     portfolio_liquidity_score: deployedWeight === 0 ? 100 : weighted((l) => l.liquidityScore),
     reasoning,
     opportunities_considered: pools.length,
-    data: { ledger_index: ctx.ledgerIndex, rlusd_per_xrp: ctx.rlusdPerXrp, sampled_at: ctx.sampledAt },
+    data: { ledger_index: ctx.ledgerIndex, rlusd_per_xrp: ctx.rlusdPerXrp, sampled_at: ctx.sampledAt, rate_source: ctx.rateSource },
     timestamp: ctx.now.toISOString(),
     valid_until: new Date(ctx.now.getTime() + VALIDITY_MS).toISOString(),
   };
