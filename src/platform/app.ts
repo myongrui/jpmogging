@@ -74,7 +74,11 @@ export function buildPlatformApp(
 
   app.post(ALLOCATE_PATH, validateMandate, requireReady, guard, async (req, res) => {
     try {
-      const result = await engine.allocate(mandateSchema.parse(req.body));
+      // The mandate schema strips unknown keys, so the chosen strategies are
+      // read off the raw body before parsing.
+      const raw = req.body as { strategies?: unknown };
+      const only = Array.isArray(raw?.strategies) ? raw.strategies.filter((x): x is string => typeof x === "string") : undefined;
+      const result = await engine.allocate(mandateSchema.parse(req.body), only);
       if (result.legs.length === 0) {
         res.status(422).json({ error: "no eligible strategy", ...result });
         return;

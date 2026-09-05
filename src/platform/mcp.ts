@@ -23,9 +23,11 @@ export interface PlatformConfig {
 export interface AllocationResponse extends Orchestration, MarketplacePlan {}
 
 export interface PlatformEngine {
+  /** Non-binding split for a mandate. Commits nothing and builds no plan. */
+  preview(mandate: Mandate, only?: string[]): Orchestration;
   /** Live rate and remaining capacity for every listed strategy. */
   quotes(): StrategyQuote[];
-  allocate(mandate: Mandate): Promise<AllocationResponse>;
+  allocate(mandate: Mandate, only?: string[]): Promise<AllocationResponse>;
   /** False while market data is cold and no allocation can be produced. */
   ready(): boolean;
   /** Books a listing fee once payment has settled. */
@@ -106,10 +108,16 @@ export function buildPlatformMcpServer(cfg: PlatformConfig, engine: PlatformEngi
   server.registerTool(
     "list_strategies",
     {
-      description: `Paid: ${cfg.listPriceDrops} drops of XRP per call via x402 on ${cfg.network}. Lists every strategy with its current headline APY, total capacity, capital already committed, the rate the next unit of capital would earn, risk score, pool risk ceiling and exit time. Figures move as strategies fill, so this is a snapshot rather than a promise. Pass your XRPL address as \`payer\`; the response carries a ready-to-sign payment. Sign it without submitting and call this tool again with the same arguments plus the paymentId and signed blob.`,
-      inputSchema: PAYMENT_SHAPE,
+      description: `Paid: ${cfg.listPriceDrops} drops of XRP per call via x402 on ${cfg.network}. Lists every strategy with its current headline APY, total capacity, capital already committed, the rate the next unit of capital would earn, risk score, pool risk ceiling and exit time. Figures move as strategies fill, so this is a snapshot rather than a promise. Supply a \`mandate\` and the response also carries a non-binding proposed split — show it to the user and get their go-ahead before calling allocate. Pass \`strategies\` to allocate only across ones the user picked from a proposed split. Pass your XRPL address as \`payer\`; the response carries a ready-to-sign payment. Sign it without submitting and call this tool again with the same arguments plus the paymentId and signed blob.`,
+      inputSchema: {
+        ...PAYMENT_SHAPE,
+        mandate: z
+          .object(MANDATE_SHAPE)
+          .optional()
+          .describe("Optional. Supply a mandate to also receive a non-binding proposed split across these strategies, so you can review it before paying for an allocation."),
+      },
     },
-    async (args: PaymentArgs) => {
+    async ({ mandate, ...args }: PaymentArgs & { mandate?: Mandate }) => {
       const envelope: PaymentRequiredEnvelope = {
         status: "payment_required",
         resource: `${cfg.baseUrl}${LIST_PATH}`,
@@ -120,17 +128,31 @@ export function buildPlatformMcpServer(cfg: PlatformConfig, engine: PlatformEngi
         pay_to: cfg.payTo,
         description: LIST_DESCRIPTION,
       };
-      return { content: [{ type: "text", text: JSON.stringify(await paidCall(engine, envelope, args, {})) }] };
+      const listed = await paidCall(engine, envelope, args, mandate ? { mandate } : {});
+      // A preview costs nothing extra and commits nothing: it is here so a
+      // human can approve the shape of an allocation before paying for one.
+      const withPreview =
+        mandate && listed && typeof listed === "object" && "strategies" in listed
+          ? { ...(listed as object), proposed_split: engine.preview(mandate) }
+          : listed;
+      return { content: [{ type: "text", text: JSON.stringify(withPreview) }] };
     },
   );
 
   server.registerTool(
     "allocate",
     {
-      description: `Paid: ${cfg.priceDrops} drops of XRP per call via x402 on ${cfg.network}. Splits a mandate across strategies by marginal yield — filling the highest-paying strategy to its capacity before moving to the next — subject to the mandate's risk ceiling, liquidity floor and concentration cap. Returns the split, the reason every rejected strategy lost, and unsigned XRPL transactions ready for a wallet to sign. Pass your XRPL address as \`payer\`; the response carries a ready-to-sign payment. Sign it without submitting and call this tool again with the same arguments plus the paymentId and signed blob.`,
-      inputSchema: { ...MANDATE_SHAPE, ...PAYMENT_SHAPE },
+      description: `Paid: ${cfg.priceDrops} drops of XRP per call via x402 on ${cfg.network}. Splits a mandate across strategies by marginal yield — filling the highest-paying strategy to its capacity before moving to the next — subject to the mandate's risk ceiling, liquidity floor and concentration cap. Returns the split, the reason every rejected strategy lost, and unsigned XRPL transactions ready for a wallet to sign. Pass \`strategies\` to allocate only across ones the user picked from a proposed split. Pass your XRPL address as \`payer\`; the response carries a ready-to-sign payment. Sign it without submitting and call this tool again with the same arguments plus the paymentId and signed blob.`,
+      inputSchema: {
+        ...MANDATE_SHAPE,
+        ...PAYMENT_SHAPE,
+        strategies: z
+          .array(z.string())
+          .optional()
+          .describe("Optional. Strategy ids to allocate across, when the user has chosen from a proposed split. Omit to let the platform choose."),
+      },
     },
-    async ({ payer, paymentId, signedTxBlob, ...mandate }: Mandate & PaymentArgs) => {
+    async ({ payer, paymentId, signedTxBlob, strategies, ...mandate }: Mandate & PaymentArgs & { strategies?: string[] }) => {
       const envelope: PaymentRequiredEnvelope = {
         status: "payment_required",
         resource: `${cfg.baseUrl}${ALLOCATE_PATH}`,
@@ -142,7 +164,8 @@ export function buildPlatformMcpServer(cfg: PlatformConfig, engine: PlatformEngi
         description: ALLOCATE_DESCRIPTION,
         input: mandate,
       };
-      return { content: [{ type: "text", text: JSON.stringify(await paidCall(engine, envelope, { payer, paymentId, signedTxBlob }, mandate)) }] };
+      const body = strategies ? { ...mandate, strategies } : mandate;
+      return { content: [{ type: "text", text: JSON.stringify(await paidCall(engine, envelope, { payer, paymentId, signedTxBlob }, body)) }] };
     },
   );
 

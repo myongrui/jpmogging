@@ -15,6 +15,9 @@ const engine = {
     throw new Error("unused");
   },
   recordListingFee: () => {},
+  preview: () => {
+    throw new Error("unused");
+  },
   preparePayment: async () => {
     throw new Error("unused");
   },

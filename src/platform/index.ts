@@ -68,6 +68,9 @@ const bridge = new X402Bridge({
     network === "xrpl:1" ? (process.env.XRPL_TESTNET_WS ?? undefined) : network === "xrpl:0" ? (process.env.XRPL_MAINNET_WS ?? undefined) : undefined,
 });
 
+/** Restricts the registry to strategies the user picked, when they picked any. */
+const chosen = (only?: string[]) => (only?.length ? profiles.filter((p) => only.includes(p.id)) : profiles);
+
 const engine = {
   ready: () => market.snapshot !== undefined,
   preparePayment: (resource: string, payer: string, body?: unknown) => bridge.prepare(resource, payer, body),
@@ -82,11 +85,18 @@ const engine = {
       split: { platformDrops: cfg.listPriceDrops, strategyDrops: {} },
     });
   },
-  allocate: async (mandate: Mandate) => {
-    const quotes = profiles.map((p) => books.get(p.id)!.quote());
-    const split = orchestrate(mandate, profiles, quotes, amendments);
+  // A preview commits no capacity and builds no plan; it exists so a human can
+  // approve the shape of an allocation before paying for one.
+  preview: (mandate: Mandate, only?: string[]) => {
+    const picked = chosen(only);
+    return orchestrate(mandate, picked, picked.map((p) => books.get(p.id)!.quote()), amendments);
+  },
+  allocate: async (mandate: Mandate, only?: string[]) => {
+    const picked = chosen(only);
+    const quotes = picked.map((p) => books.get(p.id)!.quote());
+    const split = orchestrate(mandate, picked, quotes, amendments);
     const snapshot = await market.get();
-    const built = buildMarketplacePlan(mandate, split.legs, profiles, snapshot, {
+    const built = buildMarketplacePlan(mandate, split.legs, picked, snapshot, {
       network: cfg.network,
       now: new Date(),
       available: availability(amendments),

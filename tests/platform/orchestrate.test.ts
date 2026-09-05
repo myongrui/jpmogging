@@ -72,3 +72,20 @@ describe("orchestrate", () => {
     expect(r.unplaced).toBe(60000);
   });
 });
+
+describe("choosing a subset of strategies", () => {
+  it("allocates only across the strategies the user picked", () => {
+    const picked = DEFAULT_LISTINGS.filter((p) => ["alpha", "beta"].includes(p.id));
+    const r = orchestrate(mandate(), picked, quotes({}, picked), live(["AMM"]));
+    expect(r.legs.map((l) => l.sellerId)).toEqual(["alpha", "beta"]);
+    // gamma is not rejected — it was never offered
+    expect(r.rejected.find((x) => x.sellerId === "gamma")).toBeUndefined();
+  });
+
+  it("gives a single picked strategy the whole deployable budget, up to its capacity", () => {
+    const picked = DEFAULT_LISTINGS.filter((p) => p.id === "gamma");
+    const r = orchestrate(mandate(), picked, quotes({}, picked), live(["AMM"]));
+    expect(r.legs).toEqual([expect.objectContaining({ sellerId: "gamma", amount: 40000 })]);
+    expect(r.unplaced).toBe(110000);
+  });
+})
