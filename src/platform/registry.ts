@@ -13,19 +13,19 @@ export const DEFAULT_LISTINGS: StrategyProfile[] = [
     id: "alpha", name: "Alpha Deep LP", family: "amm_lp",
     headlineApy: 0.05, capacity: 100_000,
     riskScore: 22, maxPoolRisk: 25, exitHours: 1, requires: ["AMM"],
-    payoutAddress: "rAlphaStrategyAuthorAddressPlaceholder",
+    payoutAddress: "r4ydYXpPaUBGwjVwtJE7Tnn2yvQGmw3eu6",
   },
   {
     id: "beta", name: "Beta Wide Router", family: "amm_lp",
     headlineApy: 0.045, capacity: 200_000,
     riskScore: 26, maxPoolRisk: 45, exitHours: 2, requires: ["AMM"],
-    payoutAddress: "rBetaStrategyAuthorAddressPlaceholder",
+    payoutAddress: "rKE3rvRHAkXM6XwesPRaaoH6rnZtCqpwYo",
   },
   {
     id: "gamma", name: "Gamma Thin Edge", family: "amm_lp",
     headlineApy: 0.062, capacity: 40_000,
     riskScore: 29, maxPoolRisk: 70, exitHours: 4, requires: ["AMM"],
-    payoutAddress: "rGammaStrategyAuthorAddressPlaceholder",
+    payoutAddress: "rf8k5hACKqDsJJDXyYYDpXZpTHUbNJafbe",
   },
 ];
 
