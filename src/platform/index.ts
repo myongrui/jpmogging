@@ -96,7 +96,18 @@ const engine = {
         built.strategies.map((s) => ({ strategyId: s.strategyId, amount: s.amount })),
       ),
     });
-    return { ...split, ...built };
+    // The split is sized before venue trimming, so the figures a buyer sees
+    // must be recomputed from the plan that was actually built.
+    const deployed = built.strategies.reduce((t, x) => t + x.amount, 0);
+    const blendedApy = deployed === 0 ? 0 : built.strategies.reduce((t, x) => t + (x.amount / deployed) * x.apy, 0);
+    return {
+      ...split,
+      ...built,
+      deployed,
+      reserve: mandate.amount - deployed,
+      blendedApy,
+      unplaced: split.unplaced + built.crowdedOut,
+    };
   },
 };
 

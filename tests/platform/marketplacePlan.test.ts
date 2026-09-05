@@ -110,6 +110,56 @@ describe("buildMarketplacePlan", () => {
     expect(placed).toBeLessThanOrEqual(capped.amount * capped.maximum_protocol_allocation * 2 + 1e-6);
   });
 
+  it("establishes a shared trustline once, not once per strategy", () => {
+    const { plan } = buildMarketplacePlan(
+      mandate,
+      [leg("alpha", 20000), leg("beta", 20000)],
+      DEFAULT_LISTINGS,
+      market,
+      ctx,
+    );
+    const trustlines = plan.legs.filter((l) => l.kind === "trustline");
+    const keys = trustlines.map((l) => {
+      const limit = l.tx.LimitAmount as { currency: string; issuer: string };
+      return `${limit.currency}:${limit.issuer}`;
+    });
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it("still emits a trustline per distinct issuer", () => {
+    const twoIssuers = {
+      ...market,
+      pools: [
+        { snapshot: snap("rSafe", "1000000000000"), ledgerIndex: 10, volumeXrpPerDay: 500000 },
+        { snapshot: snap("rOther", "900000000000", "rIssuerTwo"), ledgerIndex: 10, volumeXrpPerDay: 480000 },
+      ],
+    };
+    const { plan } = buildMarketplacePlan(
+      { ...mandate, maximum_protocol_allocation: 0.2 },
+      [leg("beta", 60000)],
+      DEFAULT_LISTINGS,
+      twoIssuers,
+      ctx,
+    );
+    const issuers = new Set(
+      plan.legs
+        .filter((l) => l.kind === "trustline")
+        .map((l) => (l.tx.LimitAmount as { issuer: string }).issuer),
+    );
+    expect(issuers.size).toBeGreaterThan(1);
+  });
+
+  it("keeps leg numbering contiguous after a trustline is deduped", () => {
+    const { plan } = buildMarketplacePlan(
+      mandate,
+      [leg("alpha", 20000), leg("beta", 20000)],
+      DEFAULT_LISTINGS,
+      market,
+      ctx,
+    );
+    expect(plan.legs.map((l) => l.seq)).toEqual(plan.legs.map((_, i) => i + 1));
+  });
+
   it("skips a leg whose strategy is not in the registry", () => {
     const { plan, strategies } = buildMarketplacePlan(mandate, [leg("ghost", 100000)], DEFAULT_LISTINGS, market, ctx);
     expect(strategies).toHaveLength(0);
