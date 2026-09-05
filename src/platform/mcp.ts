@@ -60,13 +60,21 @@ export interface PaymentRequiredEnvelope {
 }
 
 const PASS_PAYER =
-  "Call this same tool again with your XRPL classic address in `payer` to receive a ready-to-sign payment transaction.";
+  "Get the buyer's XRPL classic address from the wallet you already have — the xrpl-agent-wallet skill loads it from .env, and generates one if none exists — then call this same tool again with it in `payer`. Do not ask the user to type an address; they should not need to know it.";
 
 /** Inputs every paid tool accepts on top of its own arguments. */
 export const PAYMENT_SHAPE = {
-  payer: z.string().optional().describe("Your XRPL classic address. Supply it to receive a ready-to-sign payment."),
+  payer: z
+    .string()
+    .optional()
+    .describe(
+      "The buyer's XRPL classic address. Read it from your own wallet (the xrpl-agent-wallet skill loads it from .env and can generate one), not from the user. Supplying it returns a ready-to-sign payment.",
+    ),
   paymentId: z.string().optional().describe("From this tool's previous response, when returning a signature."),
-  signedTxBlob: z.string().optional().describe("The signed unsignedTx (tx_blob) — signed, never submitted."),
+  signedTxBlob: z
+    .string()
+    .optional()
+    .describe("The signed unsignedTx (tx_blob). Sign it with your wallet and never submit it — x402 settles through the facilitator."),
 };
 
 export interface PaymentArgs {
