@@ -57,25 +57,46 @@ export interface PaymentRequiredEnvelope {
   next_step?: string;
 }
 
-const SIGN_THEN_COMPLETE =
-  "Sign unsignedTx with your wallet WITHOUT submitting it, then call complete_payment with this paymentId and the signed transaction blob. Submitting it yourself spends the XRP without paying for the resource.";
 const PASS_PAYER =
-  "Call this tool again with your XRPL classic address in `payer` to receive a ready-to-sign payment transaction in the same response.";
+  "Call this same tool again with your XRPL classic address in `payer` to receive a ready-to-sign payment transaction.";
 
-/** Attaches a signable payment to the envelope when the caller named a payer. */
-async function withPayment(
+/** Inputs every paid tool accepts on top of its own arguments. */
+export const PAYMENT_SHAPE = {
+  payer: z.string().optional().describe("Your XRPL classic address. Supply it to receive a ready-to-sign payment."),
+  paymentId: z.string().optional().describe("From this tool's previous response, when returning a signature."),
+  signedTxBlob: z.string().optional().describe("The signed unsignedTx (tx_blob) — signed, never submitted."),
+};
+
+export interface PaymentArgs {
+  payer?: string;
+  paymentId?: string;
+  signedTxBlob?: string;
+}
+
+/**
+ * One paid tool, called twice.
+ *
+ * First call returns the challenge plus the transaction that satisfies it;
+ * second call returns the goods. Keeping both halves on the same tool means the
+ * agent never has to learn a separate payment vocabulary — it just calls the
+ * thing it wanted again, with a signature attached.
+ */
+async function paidCall(
   engine: PlatformEngine,
   envelope: PaymentRequiredEnvelope,
-  payer: string | undefined,
+  args: PaymentArgs,
   body: unknown,
-): Promise<PaymentRequiredEnvelope> {
-  if (!payer) return { ...envelope, next_step: PASS_PAYER };
-  const prepared = await engine.preparePayment(envelope.resource, payer, body);
+): Promise<unknown> {
+  if (args.paymentId && args.signedTxBlob) {
+    return await engine.completePayment(args.paymentId, args.signedTxBlob, body);
+  }
+  if (!args.payer) return { ...envelope, next_step: PASS_PAYER };
+  const prepared = await engine.preparePayment(envelope.resource, args.payer, body);
   return {
     ...envelope,
     paymentId: prepared.paymentId,
     unsignedTx: prepared.unsignedTx,
-    next_step: SIGN_THEN_COMPLETE,
+    next_step: `Sign unsignedTx with your wallet WITHOUT submitting it, then call this same tool again with the identical arguments plus paymentId "${prepared.paymentId}" and the signed transaction blob. Submitting it yourself spends the XRP without paying for the resource.`,
   };
 }
 
@@ -85,12 +106,10 @@ export function buildPlatformMcpServer(cfg: PlatformConfig, engine: PlatformEngi
   server.registerTool(
     "list_strategies",
     {
-      description: `Paid: ${cfg.listPriceDrops} drops of XRP per call via x402 on ${cfg.network}. Lists every strategy with its current headline APY, total capacity, capital already committed, the rate the next unit of capital would earn, risk score, pool risk ceiling and exit time. Figures move as strategies fill, so this is a snapshot rather than a promise. Pass your XRPL address as \`payer\` and the response carries a ready-to-sign payment transaction: sign it without submitting, then call complete_payment.`,
-      inputSchema: {
-        payer: z.string().optional().describe("Your XRPL classic address, to receive a ready-to-sign payment in this response"),
-      },
+      description: `Paid: ${cfg.listPriceDrops} drops of XRP per call via x402 on ${cfg.network}. Lists every strategy with its current headline APY, total capacity, capital already committed, the rate the next unit of capital would earn, risk score, pool risk ceiling and exit time. Figures move as strategies fill, so this is a snapshot rather than a promise. Pass your XRPL address as \`payer\`; the response carries a ready-to-sign payment. Sign it without submitting and call this tool again with the same arguments plus the paymentId and signed blob.`,
+      inputSchema: PAYMENT_SHAPE,
     },
-    async ({ payer }) => {
+    async (args: PaymentArgs) => {
       const envelope: PaymentRequiredEnvelope = {
         status: "payment_required",
         resource: `${cfg.baseUrl}${LIST_PATH}`,
@@ -101,17 +120,17 @@ export function buildPlatformMcpServer(cfg: PlatformConfig, engine: PlatformEngi
         pay_to: cfg.payTo,
         description: LIST_DESCRIPTION,
       };
-      return { content: [{ type: "text", text: JSON.stringify(await withPayment(engine, envelope, payer, {})) }] };
+      return { content: [{ type: "text", text: JSON.stringify(await paidCall(engine, envelope, args, {})) }] };
     },
   );
 
   server.registerTool(
     "allocate",
     {
-      description: `Paid: ${cfg.priceDrops} drops of XRP per call via x402 on ${cfg.network}. Splits a mandate across strategies by marginal yield — filling the highest-paying strategy to its capacity before moving to the next — subject to the mandate's risk ceiling, liquidity floor and concentration cap. Returns the split, the reason every rejected strategy lost, and unsigned XRPL transactions ready for a wallet to sign. Pass your XRPL address as \`payer\` and the response carries a ready-to-sign payment transaction: sign it without submitting, then call complete_payment.`,
-      inputSchema: { ...MANDATE_SHAPE, payer: z.string().optional().describe("Your XRPL classic address, to receive a ready-to-sign payment in this response") },
+      description: `Paid: ${cfg.priceDrops} drops of XRP per call via x402 on ${cfg.network}. Splits a mandate across strategies by marginal yield — filling the highest-paying strategy to its capacity before moving to the next — subject to the mandate's risk ceiling, liquidity floor and concentration cap. Returns the split, the reason every rejected strategy lost, and unsigned XRPL transactions ready for a wallet to sign. Pass your XRPL address as \`payer\`; the response carries a ready-to-sign payment. Sign it without submitting and call this tool again with the same arguments plus the paymentId and signed blob.`,
+      inputSchema: { ...MANDATE_SHAPE, ...PAYMENT_SHAPE },
     },
-    async ({ payer, ...mandate }: Mandate & { payer?: string }) => {
+    async ({ payer, paymentId, signedTxBlob, ...mandate }: Mandate & PaymentArgs) => {
       const envelope: PaymentRequiredEnvelope = {
         status: "payment_required",
         resource: `${cfg.baseUrl}${ALLOCATE_PATH}`,
@@ -123,41 +142,7 @@ export function buildPlatformMcpServer(cfg: PlatformConfig, engine: PlatformEngi
         description: ALLOCATE_DESCRIPTION,
         input: mandate,
       };
-      return { content: [{ type: "text", text: JSON.stringify(await withPayment(engine, envelope, payer, mandate)) }] };
-    },
-  );
-
-  server.registerTool(
-    "prepare_payment",
-    {
-      description:
-        "Free. Escape hatch: normally you do not need this, because list_strategies and allocate already return a ready-to-sign payment when you pass `payer`. Use it only for a resource reached some other way. Give it the resource URL and your XRPL address; it returns an unsigned, autofilled Payment carrying the challenge's invoice id, source tag and ledger deadline. SIGN IT BUT DO NOT SUBMIT IT, then pass the signed blob to complete_payment.",
-      inputSchema: {
-        resource: z.string().describe("Resource URL from the payment_required envelope"),
-        payer: z.string().describe("Your XRPL classic address, which pays and signs"),
-        body: z.record(z.string(), z.unknown()).optional().describe("The exact input echoed in the envelope, if any"),
-      },
-    },
-    async ({ resource, payer, body }) => {
-      const prepared = await engine.preparePayment(resource, payer, body ?? {});
-      return { content: [{ type: "text", text: JSON.stringify(prepared) }] };
-    },
-  );
-
-  server.registerTool(
-    "complete_payment",
-    {
-      description:
-        "Free. Claims a paid resource with a payment you signed but did not submit. Give it the paymentId from prepare_payment and the signed transaction blob; it builds the PAYMENT-SIGNATURE header, settles through the facilitator and returns the resource content. A paymentId can be claimed once and expires ten minutes after it is prepared.",
-      inputSchema: {
-        paymentId: z.string().describe("The paymentId returned by prepare_payment"),
-        signedTxBlob: z.string().describe("Signed transaction blob (tx_blob) — signed, not submitted"),
-        body: z.record(z.string(), z.unknown()).optional().describe("The same input passed to prepare_payment"),
-      },
-    },
-    async ({ paymentId, signedTxBlob, body }) => {
-      const result = await engine.completePayment(paymentId, signedTxBlob, body ?? {});
-      return { content: [{ type: "text", text: JSON.stringify(result) }] };
+      return { content: [{ type: "text", text: JSON.stringify(await paidCall(engine, envelope, { payer, paymentId, signedTxBlob }, mandate)) }] };
     },
   );
 

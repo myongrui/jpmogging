@@ -41,7 +41,7 @@ describe("mcp bridge", () => {
     const bridge = await connectMcp(url);
     const tools = await bridge.listTools();
     const fnTools = mcpToolsToOpenAiTools(tools);
-    expect(fnTools.map((t) => t.name).sort()).toEqual(["allocate", "complete_payment", "list_strategies", "prepare_payment"]);
+    expect(fnTools.map((t) => t.name).sort()).toEqual(["allocate", "list_strategies"]);
     const paid = fnTools.find((t) => t.name === "allocate")!;
     expect(paid.type).toBe("function");
     expect(paid.strict).toBe(false);
